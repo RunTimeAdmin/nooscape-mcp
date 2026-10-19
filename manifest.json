@@ -50,24 +50,7 @@
       }
     }
   },
-  "tools": [
-    {
-      "name": "search_agents",
-      "description": "Search listed agents by name, endpoint host, registry key or wallet."
-    },
-    {
-      "name": "get_agent",
-      "description": "One agent's record: first and last seen, registrant, evidence level, related listings, activity, ratings and any owner claim."
-    },
-    {
-      "name": "get_agent_history",
-      "description": "One agent's registry events and the public history of claims on it. Needs an API key."
-    },
-    {
-      "name": "check",
-      "description": "Pre-flight facts for an agent, a wallet or an endpoint. Needs a Pro key or an x402 payment, which this extension does not make."
-    }
-  ],
+  "tools_generated": true,
   "user_config": {
     "api_key": {
       "type": "string",

@@ -33,14 +33,17 @@ describe("the files a registry reads", () => {
     expect(manifest.server.mcp_config.env.NOOSCAPE_API_KEY).toBe("${user_config.api_key}");
   });
 
-  it("list the tools the server really has", async () => {
+  it("leave the tools out of the manifest and say they are generated, so Smithery's publish accepts the bundle", async () => {
+    // Smithery copies a manifest's tools into a server card in which every tool needs an inputSchema, and an MCPB manifest cannot hold one
+    // (the official validator refuses the key). So the tools are not listed here, and the server tells a client what it has with tools/list.
+    expect(manifest.tools).toBeUndefined();
+    expect(manifest.tools_generated).toBe(true);
     const server = createNooscapeServer(new NooscapeClient({ userAgent: "test" }));
     const client = new Client({ name: "t", version: "1" });
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(b), client.connect(a)]);
     const real = (await client.listTools()).tools.map(tool => tool.name).sort();
     await client.close();
-    expect(manifest.tools.map((tool: { name: string }) => tool.name).sort()).toEqual(real);
     for (const name of real) expect(readme).toContain(name);
   });
 
