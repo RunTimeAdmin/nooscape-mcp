@@ -1,7 +1,7 @@
 // Runs the server over stdio the way a client does, and calls all four tools against the LIVE Nooscape API.
 //
 //   node scripts/live-check.mjs                       the built server (run `pnpm run build` first)
-//   node scripts/live-check.mjs --npx <package spec>  through npx, e.g. ./nooscape-mcp-0.1.0.tgz or nooscape-mcp
+//   node scripts/live-check.mjs --npx <package spec>  through npx, e.g. ./nooscape-mcp-0.2.0.tgz or nooscape-mcp
 //
 // It reads NOOSCAPE_API_KEY from the environment if it is set (it is passed on and never printed). Without a key it expects the
 // history to say a key is needed and the check to say what a Pro key or a payment is, which is what a keyless user sees.
@@ -53,6 +53,17 @@ else check("check without a key shows the 402 as a message with the price", /x40
 
 const both = await client.callTool({ name: "check", arguments: { wallet: "0x0000000000000000000000000000000000000001", agent: { chain: "robinhood", id: "1" } } });
 check("check needs exactly one subject", both.isError === true && /exactly one/.test(text(both)), first(both));
+
+// Base and Arc: a search inside the chain, then the first listed agent looked up and the chain named in the summary.
+for (const [chainName, label] of [["base", "Base"], ["arc", "Arc"]]) {
+  const found = await client.callTool({ name: "search_agents", arguments: { query: "agent", chain: chainName } });
+  const results = found.isError ? [] : JSON.parse(found.content[1].text).data.results;
+  check(`search_agents finds listed agents on ${label}`, results.length > 0, first(found));
+  if (results.length > 0) {
+    const one = await client.callTool({ name: "get_agent", arguments: { chain: chainName, id: results[0].agent_id } });
+    check(`get_agent reads an agent on ${label} and names the chain`, !one.isError && text(one).includes(`${label} agent`), first(one));
+  }
+}
 
 await client.close();
 console.log(failures === 0 ? "ALL OK" : `${failures} FAILED`);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { NooscapeClient, NooscapeError, usdOf, type ClientOptions } from "../src/client.js";
+import { CHAINS, NooscapeClient, NooscapeError, usdOf, type ClientOptions } from "../src/client.js";
 import { AGENT, CHECK, PAYMENT_REQUIRED, error } from "./fixtures.js";
 
 const KEY = "nsk_" + "k".repeat(40);
@@ -241,5 +241,23 @@ describe("a price in dollars", () => {
     expect(usdOf("1e6")).toBeNull();
     expect(usdOf("")).toBeNull();
     expect(usdOf("1".repeat(30))).toBeNull();
+  });
+});
+
+describe("the chains it names", () => {
+  it("looks Base and Arc agents up by their token id, and searches inside one of them", async () => {
+    const { client, calls } = rig(() => reply(200, AGENT));
+    await client.agent("base", "42");
+    await client.agent("arc", "1");
+    await client.search("agent", "arc");
+    expect(calls.map(call => call.url)).toEqual([
+      "https://nooscape.si/api/v1/agents/base/42",
+      "https://nooscape.si/api/v1/agents/arc/1",
+      "https://nooscape.si/api/v1/agents/search?q=agent&chain=arc",
+    ]);
+  });
+
+  it("offers exactly the five chains the API serves", () => {
+    expect([...CHAINS]).toEqual(["robinhood", "bnb", "solana", "base", "arc"]);
   });
 });

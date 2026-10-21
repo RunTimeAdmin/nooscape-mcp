@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "nooscape-mcp",
   "display_name": "Nooscape",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Ask what is on record about an AI agent, a wallet or an endpoint before you pay or rely on it. Read-only facts with dates.",
-  "long_description": "Nooscape is an observatory that reads public agent registries (Robinhood Chain, BNB Smart Chain and Solana) and says what it saw and when. This extension is a thin, read-only client of its public API. It can search listed agents, give one agent's record and history, and run a pre-flight check on an agent, a wallet or an endpoint. Every answer carries the date it was read, its source and its evidence level. Nooscape gives facts, not verdicts: nothing here says an agent is good or bad, safe or unsafe, and nothing a caller pays changes a listing. Text an owner wrote about their own listing is labelled as the owner's word. The extension holds no wallet and signs no payments.",
+  "long_description": "Nooscape is an observatory that reads public agent registries (Robinhood Chain, BNB Smart Chain, Solana, Base and Arc) and says what it saw and when. This extension is a thin, read-only client of its public API. It can search listed agents, give one agent's record and history, and run a pre-flight check on an agent, a wallet or an endpoint. Every answer carries the date it was read, its source and its evidence level. Nooscape gives facts, not verdicts: nothing here says an agent is good or bad, safe or unsafe, and nothing a caller pays changes a listing. Text an owner wrote about their own listing is labelled as the owner's word. The extension holds no wallet and signs no payments.",
   "author": {
     "name": "Nooscape",
     "url": "https://nooscape.si"

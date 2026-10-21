@@ -216,7 +216,7 @@ describe("what it will not accept", () => {
       { name: "search_agents", arguments: { query: "alice", chain: "ethereum" } },
       { name: "get_agent", arguments: { chain: "robinhood" } },
       { name: "get_agent", arguments: { chain: "robinhood", id: "1", registry: "other" } },
-      { name: "get_agent_history", arguments: { chain: "base", id: "1" } },
+      { name: "get_agent_history", arguments: { chain: "polygon", id: "1" } },
     ];
     for (const attempt of attempts) {
       const outcome = await client.callTool(attempt).then(
@@ -296,5 +296,39 @@ describe("the check's subject", () => {
     expect(checkSubjectOf({ url: "HTTP://Example.com/x" })).toEqual({ subject: { url: "HTTP://Example.com/x" } });
     expect(checkSubjectOf({ url: "example.com", chain: "bnb" })).toEqual({ subject: { url: "https://example.com" }, chain: "bnb" });
     expect(typeof checkSubjectOf({})).toBe("string");
+  });
+});
+
+describe("Base and Arc", () => {
+  const arcAgent = { ...AGENT, data: { ...AGENT.data, chain: "arc", agent_id: "1", registry: "erc8004_arc", name: "Agent #1" } };
+
+  it("get_agent takes them and names the chain in the summary", async () => {
+    const { client, calls } = await connect(() => reply(200, arcAgent));
+    const result = await client.callTool({ name: "get_agent", arguments: { chain: "arc", id: "1" } });
+    expect(isError(result)).toBe(false);
+    expect(textOf(result)).toContain("Arc agent 1");
+    expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/arc/1");
+    const based = await client.callTool({ name: "get_agent", arguments: { chain: "base", id: "42" } });
+    expect(isError(based)).toBe(false);
+    expect(calls[1]!.url).toBe("https://nooscape.si/api/v1/agents/base/42");
+  });
+
+  it("search_agents and check take them too", async () => {
+    const { client, calls } = await connect(() => reply(200, SEARCH));
+    expect(isError(await client.callTool({ name: "search_agents", arguments: { query: "agent", chain: "base" } }))).toBe(false);
+    expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/search?q=agent&chain=base");
+    await client.callTool({ name: "check", arguments: { agent: { chain: "arc", id: "1" } } });
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ agent: { chain: "arc", id: "1" } });
+  });
+
+  it("still refuses a chain the API does not serve, before any request is made", async () => {
+    const { client, calls } = await connect(() => reply(200, AGENT));
+    const result = await client.callTool({ name: "get_agent", arguments: { chain: "ethereum", id: "1" } });
+    expect(isError(result)).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("says in its instructions which chains it reads", () => {
+    expect(INSTRUCTIONS).toContain("Robinhood Chain, BNB Smart Chain, Solana, Base and Arc");
   });
 });
