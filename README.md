@@ -22,7 +22,7 @@ Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `et
 
 ## Install
 
-Node.js 18 or later. Nothing to build: `npx` fetches it.
+Node.js 18 or later. Nothing to build: `npx` fetches it. `npx -y nooscape-mcp` runs the latest release every time it starts. To stay on one release, name it, as in `nooscape-mcp@0.4.1`.
 
 ### Claude Desktop
 
@@ -122,7 +122,7 @@ It is stateless (each POST to `/mcp` gets its own server and answers with JSON) 
 
 ## Listing in registries
 
-`server.json` is ready for the [official MCP registry](https://modelcontextprotocol.io/registry/quickstart) and `manifest.json` (an [MCPB](https://github.com/modelcontextprotocol/mcpb) manifest) for a Smithery stdio bundle. Neither has been submitted and the package has not been published. Publishing needs a public source repository.
+The package is on npm and in the official MCP registry (`io.github.RunTimeAdmin/nooscape-mcp`), which reads `server.json`. `manifest.json` is an [MCPB](https://github.com/modelcontextprotocol/mcpb) manifest, for a Smithery stdio bundle.
 
 ## Development
 

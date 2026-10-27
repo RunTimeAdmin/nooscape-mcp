@@ -1,6 +1,6 @@
 {
   "name": "nooscape-mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "mcpName": "io.github.RunTimeAdmin/nooscape-mcp",
   "description": "MCP server for Nooscape: ask what is on record about an AI agent, a wallet or an endpoint before you pay it or rely on it. A read-only client of the public Nooscape API.",
   "license": "MIT",
