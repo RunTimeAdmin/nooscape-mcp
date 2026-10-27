@@ -8,8 +8,8 @@
 
 export const DEFAULT_BASE_URL = "https://nooscape.si/api/v1";
 export const DEFAULT_TIMEOUT_MS = 15_000;
-/** The most of an answer that is read. The API's largest answers are far smaller than this. */
-export const MAX_BODY_CHARS = 1_000_000;
+/** The most of an answer that is read, in bytes. The API's largest answers are far smaller than this. */
+export const MAX_BODY_BYTES = 1_000_000;
 
 export const CHAINS = ["robinhood", "bnb", "solana", "ethereum", "base", "arc"] as const;
 export type Chain = (typeof CHAINS)[number];
@@ -102,6 +102,36 @@ function checkedBaseUrl(raw: string): string {
   return raw;
 }
 
+/** The answer as text, read as it arrives and given up on for good at the cap (null). A declared length over the cap is not read at all. */
+async function readCapped(response: Response): Promise<string | null> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 function retryAfterOf(headers: Headers): number | null {
   const raw = headers.get("retry-after");
   if (!raw || !/^[0-9]{1,6}$/.test(raw.trim())) return null;
@@ -184,13 +214,13 @@ export class NooscapeClient {
       throw new NooscapeError("network", "Could not reach the Nooscape API. Check the network connection and try again.");
     }
 
-    let raw: string;
+    let raw: string | null;
     try {
-      raw = await response.text();
+      raw = await readCapped(response);
     } catch {
       throw new NooscapeError("network", "The Nooscape API's answer was cut off. Try again.", { status: response.status });
     }
-    if (raw.length > MAX_BODY_CHARS) throw new NooscapeError("unexpected", "The Nooscape API's answer was larger than expected and was not read.", { status: response.status });
+    if (raw === null) throw new NooscapeError("unexpected", "The Nooscape API's answer was larger than expected and was not read.", { status: response.status });
 
     let parsed: unknown = null;
     try {

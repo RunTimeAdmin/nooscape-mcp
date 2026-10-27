@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CHAINS, NooscapeClient, NooscapeError, usdOf, type ClientOptions } from "../src/client.js";
+import { CHAINS, MAX_BODY_BYTES, NooscapeClient, NooscapeError, usdOf, type ClientOptions } from "../src/client.js";
 import { AGENT, CHECK, PAYMENT_REQUIRED, STATS, error } from "./fixtures.js";
 
 const KEY = "nsk_" + "k".repeat(40);
@@ -131,6 +131,79 @@ describe("where the key may be sent", () => {
       return;
     }
     throw new Error("expected a refusal");
+  });
+});
+
+describe("an answer that is larger than the cap", () => {
+  const encoder = new TextEncoder();
+
+  /** An answer that arrives in pieces, and counts how many pieces it was asked for and whether it was given up on. */
+  function arriving(piece: number, count: number, headers: Record<string, string> = {}) {
+    const seen = { pulled: 0, cancelled: false };
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (seen.pulled >= count) return controller.close();
+        seen.pulled += 1;
+        controller.enqueue(encoder.encode("x".repeat(piece)));
+      },
+      cancel() {
+        seen.cancelled = true;
+      },
+    });
+    return { seen, response: () => new Response(body, { status: 200, headers: { "content-type": "application/json", ...headers } }) };
+  }
+
+  it("is given up on when the cap is passed, without reading the rest", async () => {
+    const { seen, response } = arriving(100_000, 1_000);
+    const caught = await failure(() => rig(response).client.search("alice"));
+    expect(caught.kind).toBe("unexpected");
+    expect(caught.message).toContain("larger than expected");
+    expect(seen.cancelled).toBe(true);
+    expect(seen.pulled).toBeLessThanOrEqual(13);
+  });
+
+  it("is not read at all when its declared length is over the cap", async () => {
+    const { seen, response } = arriving(1_000, 1_000, { "content-length": "5000000" });
+    const caught = await failure(() => rig(response).client.search("alice"));
+    expect(caught.message).toContain("larger than expected");
+    expect(seen.cancelled).toBe(true);
+    expect(seen.pulled).toBeLessThanOrEqual(2);
+  });
+
+  it("is counted in bytes, so two-byte characters reach the cap at half as many", async () => {
+    const padded = (count: number, character: string) => `{"pad":"${character.repeat(count)}"}`;
+    const exact = padded(MAX_BODY_BYTES - 10, "a");
+    expect(new TextEncoder().encode(exact).length).toBe(MAX_BODY_BYTES);
+    expect(await rig(() => reply(200, exact)).client.search("alice")).toHaveProperty("pad");
+    const tooMany = padded(600_000, "\u00e9");
+    expect(tooMany.length).toBeLessThan(MAX_BODY_BYTES);
+    expect((await failure(() => rig(() => reply(200, tooMany)).client.search("alice"))).message).toContain("larger than expected");
+  });
+
+  it("reads a character that arrives in two pieces", async () => {
+    const bytes = encoder.encode('{"name":"caf\u00e9"}');
+    const split = bytes.indexOf(0xc3) + 1;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, split));
+        controller.enqueue(bytes.slice(split));
+        controller.close();
+      },
+    });
+    const { client } = rig(() => new Response(body, { status: 200, headers: { "content-type": "application/json" } }));
+    expect(await client.search("alice")).toEqual({ name: "caf\u00e9" });
+  });
+
+  it("says the answer was cut off when the connection breaks while it is read", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error("connection reset"));
+      },
+    });
+    const caught = await failure(() => rig(() => new Response(body, { status: 200 })).client.search("alice"));
+    expect(caught.kind).toBe("network");
+    expect(caught.message).toContain("cut off");
+    expect(caught.message).not.toContain("reset");
   });
 });
 
