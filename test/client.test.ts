@@ -89,9 +89,48 @@ describe("what is sent", () => {
   });
 
   it("uses the base address it is given, without a trailing slash doubling", async () => {
-    const { client, calls } = rig(() => reply(200, AGENT), { baseUrl: "https://example.test/api/v1///" });
+    const { client, calls } = rig(() => reply(200, AGENT), { baseUrl: "https://api.nooscape.si/v1///" });
     await client.agent("bnb", "9");
-    expect(calls[0]!.url).toBe("https://example.test/api/v1/agents/bnb/9");
+    expect(calls[0]!.url).toBe("https://api.nooscape.si/v1/agents/bnb/9");
+  });
+});
+
+describe("where the key may be sent", () => {
+  it("accepts https on nooscape.si and the names under it, and a local address for a test", () => {
+    for (const baseUrl of ["https://nooscape.si/api/v1", "https://NOOSCAPE.SI/api/v1", "https://api.nooscape.si/v1", "http://127.0.0.1:8787/api/v1", "http://localhost:3000/api/v1", "https://localhost/api/v1", "http://[::1]:3000/api/v1"]) {
+      expect(() => new NooscapeClient({ userAgent: "x", baseUrl }), baseUrl).not.toThrow();
+    }
+    expect(() => new NooscapeClient({ userAgent: "x" })).not.toThrow();
+  });
+
+  it("refuses any other address, before anything is sent", () => {
+    for (const baseUrl of [
+      "http://nooscape.si/api/v1",
+      "https://example.test/api/v1",
+      "https://nooscape.si.example.test/api/v1",
+      "https://evilnooscape.si/api/v1",
+      "https://nooscape.si@example.test/api/v1",
+      "https://user:pw@nooscape.si/api/v1",
+      "https://user@nooscape.si/api/v1",
+      "http://192.168.1.5/api/v1",
+      "ftp://nooscape.si/api/v1",
+      "nooscape.si/api/v1",
+      "",
+    ]) {
+      const fetchImpl = vi.fn();
+      expect(() => new NooscapeClient({ userAgent: "x", apiKey: KEY, baseUrl, fetch: fetchImpl as unknown as typeof fetch }), baseUrl).toThrow(/^baseUrl /);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not put the key in the refusal", () => {
+    try {
+      new NooscapeClient({ userAgent: "x", apiKey: KEY, baseUrl: `https://${KEY}:pw@example.test/` });
+    } catch (caught) {
+      expect(String((caught as Error).message)).not.toContain(KEY);
+      return;
+    }
+    throw new Error("expected a refusal");
   });
 });
 

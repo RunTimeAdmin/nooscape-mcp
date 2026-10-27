@@ -72,6 +72,7 @@ export type ClientOptions = {
   /** Sent as `Authorization: Bearer`. Never logged, never echoed. */
   apiKey?: string | undefined;
   userAgent: string;
+  /** Where the API is. Only https on nooscape.si, or a local address for a test, because the key is sent there. */
   baseUrl?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
@@ -81,6 +82,25 @@ type Json = Record<string, unknown>;
 
 const isObject = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown): string | null => (typeof value === "string" && value.length > 0 ? value : null);
+
+/**
+ * Where the key may be sent: https on nooscape.si or a name under it, or a loopback address (http or https) for a server run by a test.
+ * The shipped program never passes an address, so this is for a program that builds the client itself.
+ */
+function checkedBaseUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("baseUrl is not an address.");
+  }
+  if (url.username !== "" || url.password !== "") throw new Error("baseUrl must not carry a user name or a password.");
+  const host = url.hostname.toLowerCase();
+  const ours = url.protocol === "https:" && (host === "nooscape.si" || host.endsWith(".nooscape.si"));
+  const local = (url.protocol === "https:" || url.protocol === "http:") && (host === "localhost" || host === "127.0.0.1" || host === "[::1]");
+  if (!ours && !local) throw new Error("baseUrl must be https on nooscape.si, or a local address for a test.");
+  return raw;
+}
 
 function retryAfterOf(headers: Headers): number | null {
   const raw = headers.get("retry-after");
@@ -110,7 +130,7 @@ export class NooscapeClient {
     const key = options.apiKey?.trim();
     this.apiKey = key ? key : undefined;
     this.userAgent = options.userAgent;
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.baseUrl = checkedBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? fetch;
   }
