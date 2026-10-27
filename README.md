@@ -111,7 +111,8 @@ npx -y nooscape-mcp --http --port 9000
 It is stateless (each POST to `/mcp` gets its own server and answers with JSON) and is meant for trying the server locally and for hosting later. It is **not deployed anywhere** by this package. It has no sign-in of its own, so:
 
 - It listens on `127.0.0.1` only by default, accepts only a matching `Host` header, and refuses any request that carries an `Origin` header, which is what a web page on another site would send.
-- Everyone who can reach it uses the server's one `NOOSCAPE_API_KEY`. Do not put it on a public address as it is. A hosted version would need per-caller keys.
+- A `--host` that is not this machine is refused unless `--allow-remote` is also given (a container needs it, to listen inside the container). Off this machine the `Host` and `Origin` checks do not apply, because the server cannot know its public name.
+- Everyone who can reach it uses the server's one `NOOSCAPE_API_KEY`. Do not put it on a public address as it is: put something in front that signs callers in. A hosted version would need per-caller keys.
 
 ## Security notes
 

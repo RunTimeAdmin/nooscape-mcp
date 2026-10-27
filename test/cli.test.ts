@@ -13,10 +13,26 @@ describe("the command line", () => {
     expect(parseArgs(["--http"])).toEqual({ mode: "http", port: 8787, host: "127.0.0.1" });
     expect(parseArgs(["--http", "--port", "0"])).toEqual({ mode: "http", port: 0, host: "127.0.0.1" });
     expect(parseArgs(["--http", "--port", "9000", "--host", "0.0.0.0"])).toEqual({ mode: "http", port: 9000, host: "0.0.0.0" });
+    expect(parseArgs(["--http", "--host", "0.0.0.0", "--allow-remote"])).toEqual({ mode: "http", port: 8787, host: "0.0.0.0", allowRemote: true });
+  });
+
+  it("will not listen on an address that is not this machine unless it is told to, and says why", async () => {
+    const out = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const err = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    for (const host of ["0.0.0.0", "192.168.1.20", "::", "nooscape.example"]) {
+      expect(await main(["--http", "--host", host], {}), host).toBe(2);
+    }
+    expect(out).not.toHaveBeenCalled();
+    const said = err.mock.calls.map(call => String(call[0]));
+    expect(said).toHaveLength(4);
+    for (const line of said) {
+      expect(line).toContain("--allow-remote");
+      expect(line).toContain("no sign-in");
+    }
   });
 
   it("refuses what it does not know, and a port or host without the HTTP flag", () => {
-    for (const args of [["--nope"], ["--http", "--port"], ["--http", "--port", "abc"], ["--http", "--port", "70000"], ["--http", "--port", "1.5"], ["--http", "--host"], ["--port", "80"], ["--host", "x"], ["extra"]]) {
+    for (const args of [["--nope"], ["--http", "--port"], ["--http", "--port", "abc"], ["--http", "--port", "70000"], ["--http", "--port", "1.5"], ["--http", "--host"], ["--port", "80"], ["--host", "x"], ["--allow-remote"], ["extra"]]) {
       expect(parseArgs(args).mode, args.join(" ")).toBe("error");
     }
   });
@@ -48,6 +64,7 @@ describe("the command line", () => {
     expect(USAGE).toContain("NOOSCAPE_API_KEY");
     expect(USAGE).toContain("Never logged or echoed");
     expect(USAGE).toContain("--http");
+    expect(USAGE).toContain("--allow-remote");
   });
 
   it("reads the key from NOOSCAPE_API_KEY, and treats empty or an unfilled placeholder as no key", () => {
