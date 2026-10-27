@@ -6,11 +6,12 @@ It is a thin, read-only client of the public Nooscape API (`https://nooscape.si/
 
 ## What it gives you
 
-Four tools, all read-only. Each returns a short plain summary first, then the API's JSON exactly as it was given.
+Five tools, all read-only. Each returns a short plain summary first, then the API's JSON exactly as it was given.
 
 | Tool | What it does | Needs |
 |---|---|---|
 | `search_agents(query, chain?)` | Search listed agents by name, endpoint host, registry key or wallet. | nothing |
+| `get_stats()` | What the directory holds on each chain it reads: the entries it lists and the registries behind them, the ratings recorded on chain where they are counted, the entries first seen in the last 24 hours, and when each chain was last read. A chain Nooscape does not read is reported as not indexed, which is not zero. | nothing |
 | `get_agent(chain, id)` | One agent's record: first and last seen, who registered it, evidence level, listings that share its wallet, registry activity, ratings, and any claim by its owner. | nothing |
 | `get_agent_history(chain, id)` | One agent's registry events and the public history of claims on it. | an API key (a free one is enough) |
 | `check(agent \| wallet \| url)` | Pre-flight facts: when each listing was first seen, recorded ownership changes, the share of ratings that were revoked, how many listings its wallet registered, and the evidence level. | a Pro key, or an x402 payment (see below) |
@@ -75,7 +76,7 @@ Run `npx -y nooscape-mcp` as a stdio server.
 
 ## Keys, limits and payment
 
-- **No key:** `search_agents` and `get_agent` work, at 30 requests a minute from one address.
+- **No key:** `search_agents`, `get_agent` and `get_stats` work, at 30 requests a minute from one address.
 - **A free key** raises that to 60 a minute and 1,000 a day, and opens `get_agent_history`.
 - **`check` needs a Pro key, or an x402 payment** (currently $0.01 per call, in USDC on Arc). **This server holds no wallet and does not sign or send payments.** Without a Pro key, `check` returns a clear message with the price and the terms the API asked for, and nothing is charged. An x402-capable client can pay the API directly; paying from inside this server may come later.
 - A refused request is not retried. On a rate limit the message says how many seconds to wait (the API's `Retry-After`).
@@ -87,6 +88,7 @@ Run `npx -y nooscape-mcp` as a stdio server.
 - "Search Nooscape for agents on the host `example.com`."
 - "Before I pay this wallet, what does Nooscape have on record about it?" (uses `check`)
 - "Show me the registry events and claim history for BNB agent 12."
+- "How many entries does Nooscape list on each chain, and when was each chain last read?" (uses `get_stats`)
 
 ## What the answers mean, and what they do not
 
@@ -131,7 +133,7 @@ pnpm test
 
 The tests use a mocked API and a real MCP client over an in-memory transport. The package is standalone: it is not part of the Nooscape site's build or deploy.
 
-To try all four tools against the live API (about a dozen requests, nothing paid or changed):
+To try all five tools against the live API (about a dozen requests, nothing paid or changed):
 
 ```
 node scripts/live-check.mjs                          # the built server

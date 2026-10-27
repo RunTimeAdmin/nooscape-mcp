@@ -75,6 +75,43 @@ export function summarizeSearch(answer: unknown): string {
   }
 }
 
+function statsLine(row: Json): string {
+  const id = num(row.chain_id);
+  const name = `${str(row.label) ?? chainLabel(row.chain)}${id !== null ? ` (chain id ${id})` : ""}`;
+  if (row.indexed !== true) return `- ${name}: not indexed, which is not measured and not the same as none.`;
+  const registries = list(row.registries)
+    .filter(isObject)
+    .map(registry => `${str(registry.registry) ?? "registry"} ${num(registry.acknowledged) ?? "?"}`);
+  const ratings = num(row.ratings_recorded);
+  const held = num(row.registrations_on_chain);
+  const fresh = num(row.new_in_24h);
+  return `- ${name}: ${[
+    `${num(row.acknowledged) ?? "not measured"} listed${registries.length > 0 ? ` (${registries.join(", ")})` : ""}.`,
+    ratings !== null ? `${ratings} ratings recorded.` : "Ratings not measured.",
+    held !== null ? `Its registry holds ${held} registrations; those the listing rules do not list are held out and not judged.` : null,
+    fresh !== null ? `${fresh} first seen in the last 24 hours.` : "First seen in the last 24 hours: not measured.",
+    `Last read ${when(row.last_read_at)}.`,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" ")}`;
+}
+
+export function summarizeStats(answer: unknown): string {
+  try {
+    if (!isObject(answer) || !isObject(answer.data)) return NOT_SHAPED;
+    const data = answer.data;
+    const rows = list(data.chains).filter(isObject);
+    const totals = isObject(data.totals) ? data.totals : {};
+    const lines: Array<string | null> = [`What the directory holds. Data as of ${when(answer.as_of)}: ${num(totals.acknowledged) ?? "an unknown number of"} entries listed on ${rows.length} chain${rows.length === 1 ? "" : "s"}.`];
+    for (const row of rows) lines.push(statsLine(row));
+    lines.push(str(data.statement) ? `API statement: ${str(data.statement)}` : null);
+    lines.push(attribution(answer));
+    return finish(lines);
+  } catch {
+    return NOT_SHAPED;
+  }
+}
+
 function ownerTextLines(claim: Json): Array<string | null> {
   const owner = isObject(claim.owner_text) ? claim.owner_text : null;
   if (!owner) return [claim.status === "on_hold" ? "  The owner's text is not shown while the claim is on hold." : "  The claim holder has written no text."];

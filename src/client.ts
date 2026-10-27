@@ -129,6 +129,11 @@ export class NooscapeClient {
     return this.request("GET", `/agents/search?${params.toString()}`);
   }
 
+  /** GET /stats: what the directory holds on each chain. Needs no key. */
+  stats(): Promise<unknown> {
+    return this.request("GET", "/stats");
+  }
+
   /** GET /agents/{chain}/{id}. */
   agent(chain: Chain, id: string, registry?: SolanaRegistry): Promise<unknown> {
     return this.request("GET", `/agents/${encodeURIComponent(chain)}/${encodeURIComponent(id)}${registry ? `?registry=${registry}` : ""}`);

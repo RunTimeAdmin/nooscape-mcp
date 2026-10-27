@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CHAINS, NooscapeClient, NooscapeError, usdOf, type ClientOptions } from "../src/client.js";
-import { AGENT, CHECK, PAYMENT_REQUIRED, error } from "./fixtures.js";
+import { AGENT, CHECK, PAYMENT_REQUIRED, STATS, error } from "./fixtures.js";
 
 const KEY = "nsk_" + "k".repeat(40);
 
@@ -63,6 +63,18 @@ describe("what is sent", () => {
     expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/search?q=a+b%26c%3Dd&chain=solana");
     expect(calls[1]!.url).toBe("https://nooscape.si/api/v1/agents/solana/ab%2Fcd%3Fx?registry=solana_said");
     expect(calls[2]!.url).toBe("https://nooscape.si/api/v1/agents/robinhood/8865/history");
+  });
+
+  it("asks for the stats with a plain GET: no body, no query, and the key only when there is one", async () => {
+    const { client, calls } = rig(() => reply(200, STATS));
+    expect(await client.stats()).toEqual(STATS);
+    expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/stats");
+    expect(calls[0]!.init.method).toBe("GET");
+    expect(calls[0]!.init.body).toBeUndefined();
+    expect((calls[0]!.init.headers as Record<string, string>).authorization).toBeUndefined();
+    const keyed = rig(() => reply(200, STATS), { apiKey: KEY });
+    await keyed.client.stats();
+    expect((keyed.calls[0]!.init.headers as Record<string, string>).authorization).toBe(`Bearer ${KEY}`);
   });
 
   it("posts a check as JSON with the subject, and the chain that narrows a wallet", async () => {
