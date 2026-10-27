@@ -154,6 +154,56 @@ export const CHECK = {
   },
 };
 
+export const STATS_STATEMENT =
+  "Counts of what the directory holds on each chain it reads, and when each chain was last read. A count of listed entries is not a count of the agents that exist or work, and a registration that the published listing rules do not list is held out and not judged.";
+
+const REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
+
+/** The shape GET /stats gives (the figures are an example, not a reading). */
+export const STATS = {
+  api_version: "v1",
+  as_of: "2026-10-27T01:30:00.000Z",
+  source: { kind: "directory_stats", chains: ["robinhood", "bnb", "solana", "base"] },
+  license: LICENSE,
+  data: {
+    statement: STATS_STATEMENT,
+    totals: { acknowledged: 19883 + 6924 + 17576 + 9087 },
+    chains: [
+      { chain: "robinhood", label: "Robinhood Chain", chain_id: 4663, indexed: true, acknowledged: 19883, ratings_recorded: 641, registrations_on_chain: null, new_in_24h: 88, registries: [{ registry: "erc8004", address: REGISTRY, acknowledged: 19883 }], last_read_at: "2026-10-27T01:10:00.000Z" },
+      { chain: "bnb", label: "BNB Chain", chain_id: 56, indexed: true, acknowledged: 6924, ratings_recorded: null, registrations_on_chain: 392502, new_in_24h: 12, registries: [{ registry: "erc8004_bsc", address: REGISTRY, acknowledged: 6924 }], last_read_at: "2026-10-27T01:12:00.000Z" },
+      {
+        chain: "solana",
+        label: "Solana",
+        chain_id: null,
+        indexed: true,
+        acknowledged: 17576,
+        ratings_recorded: 17546,
+        registrations_on_chain: null,
+        new_in_24h: 309,
+        registries: [
+          { registry: "solana_said", address: null, acknowledged: 14214 },
+          { registry: "solana_registry", address: null, acknowledged: 1591 },
+          { registry: "solana_8004", address: null, acknowledged: 1515 },
+          { registry: "solana_agenc", address: null, acknowledged: 256 },
+        ],
+        last_read_at: "2026-10-27T01:15:00.000Z",
+      },
+      { chain: "base", label: "Base", chain_id: 8453, indexed: true, acknowledged: 9087, ratings_recorded: 667689, registrations_on_chain: 1135856, new_in_24h: 140, registries: [{ registry: "erc8004_base", address: REGISTRY, acknowledged: 9087 }], last_read_at: "2026-10-27T01:20:00.000Z" },
+    ],
+  },
+};
+
+/** The same answer while a chain is not read: no counts at all, and not zeros. */
+export const STATS_NOT_INDEXED = {
+  ...STATS,
+  source: { kind: "directory_stats", chains: ["robinhood", "bnb"] },
+  data: {
+    ...STATS.data,
+    totals: { acknowledged: 19883 },
+    chains: [STATS.data.chains[0]!, { chain: "bnb", label: "BNB Chain", chain_id: 56, indexed: false, acknowledged: null, ratings_recorded: null, registrations_on_chain: null, new_in_24h: null, registries: [], last_read_at: null }],
+  },
+};
+
 export const PAYMENT_REQUIRED = {
   x402Version: 2,
   error: "The pre-flight check needs a Pro key or a payment of $0.01 per call. PAYMENT-SIGNATURE header is required.",

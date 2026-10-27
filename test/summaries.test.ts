@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { summarizeAgent, summarizeCheck, summarizeHistory, summarizeSearch } from "../src/summaries.js";
-import { ACKNOWLEDGED, AGENT, AGENT_CLAIMED, AGENT_ON_HOLD, CHECK, CHECK_STATEMENT, HISTORY, OWNER_INSTRUCTION, SEARCH } from "./fixtures.js";
+import { summarizeAgent, summarizeCheck, summarizeHistory, summarizeSearch, summarizeStats } from "../src/summaries.js";
+import { ACKNOWLEDGED, AGENT, AGENT_CLAIMED, AGENT_ON_HOLD, CHECK, CHECK_STATEMENT, HISTORY, OWNER_INSTRUCTION, SEARCH, STATS, STATS_NOT_INDEXED, STATS_STATEMENT } from "./fixtures.js";
 
 /** Words a summary must never add on its own account. The API's own statements may use some of them to say what its data does not mean, and an owner may write anything, so those lines are set apart. */
 const VERDICT = /\b(safe|unsafe|trust\w*|verified|certified|endorsed|secure|reputable|legit\w*|scam\w*|fraud\w*|score|ranked?|ranking|grade[ds]?|recommend\w*|reliable|good|bad|dangerous|risky|risk)\b/i;
@@ -14,6 +14,8 @@ const ALL = {
   hold: summarizeAgent(AGENT_ON_HOLD),
   history: summarizeHistory(HISTORY),
   check: summarizeCheck(CHECK),
+  stats: summarizeStats(STATS),
+  notIndexed: summarizeStats(STATS_NOT_INDEXED),
 };
 
 describe("what every summary keeps", () => {
@@ -28,6 +30,8 @@ describe("what every summary keeps", () => {
     expect(ALL.check).toContain("Data as of 2026-10-19T21:00:00.000Z");
     expect(ALL.check).toContain("Evidence: layer acknowledged");
     expect(ALL.check).toContain("last seen 2026-10-19T18:30:08.000Z");
+    expect(ALL.stats).toContain("Data as of 2026-10-27T01:30:00.000Z");
+    expect(ALL.stats).toContain("Last read 2026-10-27T01:10:00.000Z.");
   });
 
   it("gives the BNB level in the API's own words, with when it was read", () => {
@@ -42,6 +46,7 @@ describe("what every summary keeps", () => {
   it("quotes the API's statements whole and sets them apart", () => {
     expect(ALL.agent).toContain(`API statement: ${ACKNOWLEDGED}`);
     expect(ALL.check).toContain(`API statement: ${CHECK_STATEMENT}`);
+    expect(ALL.stats).toContain(`API statement: ${STATS_STATEMENT}`);
   });
 });
 
@@ -115,6 +120,23 @@ describe("the contents", () => {
     expect(ALL.history).toContain("Claim history: 3 entries.");
   });
 
+  it("gives each chain's counts as the API gave them: the entries listed and their registries, the ratings, the registry's registrations, the new entries and the last read", () => {
+    const lines = mine(ALL.stats);
+    expect(lines[0]).toBe("What the directory holds. Data as of 2026-10-27T01:30:00.000Z: 53470 entries listed on 4 chains.");
+    expect(lines).toContain("- Robinhood Chain (chain id 4663): 19883 listed (erc8004 19883). 641 ratings recorded. 88 first seen in the last 24 hours. Last read 2026-10-27T01:10:00.000Z.");
+    expect(lines).toContain("- BNB Chain (chain id 56): 6924 listed (erc8004_bsc 6924). Ratings not measured. Its registry holds 392502 registrations; those the listing rules do not list are held out and not judged. 12 first seen in the last 24 hours. Last read 2026-10-27T01:12:00.000Z.");
+    expect(lines).toContain("- Solana: 17576 listed (solana_said 14214, solana_registry 1591, solana_8004 1515, solana_agenc 256). 17546 ratings recorded. 309 first seen in the last 24 hours. Last read 2026-10-27T01:15:00.000Z.");
+    expect(lines.some(line => line.startsWith("- Base (chain id 8453): 9087 listed (erc8004_base 9087). 667689 ratings recorded. Its registry holds 1135856 registrations;"))).toBe(true);
+  });
+
+  it("says a chain that is not read is not indexed, and not none, and a figure that is not measured is not a zero", () => {
+    expect(ALL.notIndexed).toContain("What the directory holds. Data as of 2026-10-27T01:30:00.000Z: 19883 entries listed on 2 chains.");
+    expect(ALL.notIndexed).toContain("- BNB Chain (chain id 56): not indexed, which is not measured and not the same as none.");
+    expect(ALL.notIndexed).not.toMatch(/BNB Chain.*\b0\b/);
+    const missing = summarizeStats({ ...STATS, data: { ...STATS.data, chains: [{ ...STATS.data.chains[0]!, ratings_recorded: null, new_in_24h: null, last_read_at: null }] } });
+    expect(missing).toContain("- Robinhood Chain (chain id 4663): 19883 listed (erc8004 19883). Ratings not measured. First seen in the last 24 hours: not measured. Last read unknown.");
+  });
+
   it("says when a check matched no listing", () => {
     const none = { ...CHECK, data: { ...CHECK.data, matched_total: 0, results: [] } };
     expect(summarizeCheck(none)).toContain("0 listings matched.");
@@ -134,7 +156,7 @@ describe("an answer in a shape it does not expect", () => {
 
   it("gives a short note and never throws", () => {
     for (const answer of odd) {
-      for (const summarize of [summarizeSearch, summarizeAgent, summarizeHistory, summarizeCheck]) {
+      for (const summarize of [summarizeSearch, summarizeAgent, summarizeHistory, summarizeCheck, summarizeStats]) {
         const summary = summarize(answer);
         expect(typeof summary).toBe("string");
         expect(summary.length).toBeGreaterThan(0);

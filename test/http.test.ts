@@ -39,12 +39,12 @@ const rpc = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params
 const jsonHeaders = (extra: Record<string, string> = {}) => ({ "content-type": "application/json", accept: "application/json, text/event-stream", ...extra });
 
 describe("the Streamable HTTP mode", () => {
-  it("serves the four tools to a real MCP client, and a tool call reaches the API", async () => {
+  it("serves the five tools to a real MCP client, and a tool call reaches the API", async () => {
     const { url, fetchImpl } = await start();
     const client = new Client({ name: "http-test", version: "1.0.0" });
     await client.connect(new StreamableHTTPClientTransport(new URL(url)));
     const { tools } = await client.listTools();
-    expect(tools.map(tool => tool.name).sort()).toEqual(["check", "get_agent", "get_agent_history", "search_agents"]);
+    expect(tools.map(tool => tool.name).sort()).toEqual(["check", "get_agent", "get_agent_history", "get_stats", "search_agents"]);
     const result = (await client.callTool({ name: "get_agent", arguments: { chain: "robinhood", id: "8865" } })) as { content: Array<{ text: string }> };
     expect(result.content[0]!.text).toContain("Agent #8865");
     expect(fetchImpl).toHaveBeenCalledTimes(1);
@@ -57,7 +57,7 @@ describe("the Streamable HTTP mode", () => {
     const b = await raw(http.port, { headers: jsonHeaders({ host: `127.0.0.1:${http.port}` }), body: rpc });
     expect(a.status).toBe(200);
     expect(b.status).toBe(200);
-    expect(JSON.parse(a.body).result.tools).toHaveLength(4);
+    expect(JSON.parse(a.body).result.tools).toHaveLength(5);
   });
 
   it("answers only POST to /mcp: a GET is 405 with what is allowed, anything else is 404", async () => {
