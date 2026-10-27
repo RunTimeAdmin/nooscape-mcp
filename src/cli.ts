@@ -19,6 +19,8 @@ Usage:
 Options for --http:
   --port <number>    Port to listen on. Default 8787.
   --host <address>   Address to bind. Default 127.0.0.1 (this machine only).
+  --allow-remote     Allow a --host that is not this machine. There is still no sign-in: use it only behind
+                     something that signs callers in.
 
 Environment:
   NOOSCAPE_API_KEY   Optional. An API key, sent as a bearer token. A free key unlocks get_agent_history;
@@ -29,18 +31,21 @@ Other:
   --version, -v      Show the version.
 `;
 
-export type Parsed = { mode: "stdio" } | { mode: "http"; port: number; host: string } | { mode: "help" } | { mode: "version" } | { mode: "error"; message: string };
+export type Parsed = { mode: "stdio" } | { mode: "http"; port: number; host: string; allowRemote?: boolean } | { mode: "help" } | { mode: "version" } | { mode: "error"; message: string };
 
 export function parseArgs(argv: string[]): Parsed {
   let http = false;
   let port = 8787;
   let host = "127.0.0.1";
+  let allowRemote = false;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]!;
     if (arg === "--help" || arg === "-h") return { mode: "help" };
     if (arg === "--version" || arg === "-v") return { mode: "version" };
     if (arg === "--http") {
       http = true;
+    } else if (arg === "--allow-remote") {
+      allowRemote = true;
     } else if (arg === "--port" || arg === "--host") {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--")) return { mode: "error", message: `${arg} needs a value.` };
@@ -56,8 +61,8 @@ export function parseArgs(argv: string[]): Parsed {
       return { mode: "error", message: `Unknown option ${arg}.` };
     }
   }
-  if (!http && (argv.includes("--port") || argv.includes("--host"))) return { mode: "error", message: "--port and --host belong with --http." };
-  return http ? { mode: "http", port, host } : { mode: "stdio" };
+  if (!http && (argv.includes("--port") || argv.includes("--host") || allowRemote)) return { mode: "error", message: "--port, --host and --allow-remote belong with --http." };
+  return http ? { mode: "http", port, host, ...(allowRemote ? { allowRemote } : {}) } : { mode: "stdio" };
 }
 
 /**
@@ -88,6 +93,10 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
 
   if (parsed.mode === "http") {
     if (!isLoopback(parsed.host)) {
+      if (!parsed.allowRemote) {
+        process.stderr.write(`The HTTP mode has no sign-in, so it listens on this machine only, and ${parsed.host} is not this machine. To bind it anyway, add --allow-remote, and put something in front that signs callers in.\n`);
+        return 2;
+      }
       process.stderr.write("Warning: this address is not local. The HTTP mode has no sign-in, and everyone who can reach it uses this server's API key.\n");
     }
     const running = await startHttp({ port: parsed.port, host: parsed.host, makeServer: () => createNooscapeServer(client) });

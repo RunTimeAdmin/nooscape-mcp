@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CHAINS, NooscapeClient, NooscapeError, usdOf, type ClientOptions } from "../src/client.js";
+import { CHAINS, MAX_BODY_BYTES, NooscapeClient, NooscapeError, usdOf, type ClientOptions } from "../src/client.js";
 import { AGENT, CHECK, PAYMENT_REQUIRED, STATS, error } from "./fixtures.js";
 
 const KEY = "nsk_" + "k".repeat(40);
@@ -89,9 +89,121 @@ describe("what is sent", () => {
   });
 
   it("uses the base address it is given, without a trailing slash doubling", async () => {
-    const { client, calls } = rig(() => reply(200, AGENT), { baseUrl: "https://example.test/api/v1///" });
+    const { client, calls } = rig(() => reply(200, AGENT), { baseUrl: "https://api.nooscape.si/v1///" });
     await client.agent("bnb", "9");
-    expect(calls[0]!.url).toBe("https://example.test/api/v1/agents/bnb/9");
+    expect(calls[0]!.url).toBe("https://api.nooscape.si/v1/agents/bnb/9");
+  });
+});
+
+describe("where the key may be sent", () => {
+  it("accepts https on nooscape.si and the names under it, and a local address for a test", () => {
+    for (const baseUrl of ["https://nooscape.si/api/v1", "https://NOOSCAPE.SI/api/v1", "https://api.nooscape.si/v1", "http://127.0.0.1:8787/api/v1", "http://localhost:3000/api/v1", "https://localhost/api/v1", "http://[::1]:3000/api/v1"]) {
+      expect(() => new NooscapeClient({ userAgent: "x", baseUrl }), baseUrl).not.toThrow();
+    }
+    expect(() => new NooscapeClient({ userAgent: "x" })).not.toThrow();
+  });
+
+  it("refuses any other address, before anything is sent", () => {
+    for (const baseUrl of [
+      "http://nooscape.si/api/v1",
+      "https://example.test/api/v1",
+      "https://nooscape.si.example.test/api/v1",
+      "https://evilnooscape.si/api/v1",
+      "https://nooscape.si@example.test/api/v1",
+      "https://user:pw@nooscape.si/api/v1",
+      "https://user@nooscape.si/api/v1",
+      "http://192.168.1.5/api/v1",
+      "ftp://nooscape.si/api/v1",
+      "nooscape.si/api/v1",
+      "",
+    ]) {
+      const fetchImpl = vi.fn();
+      expect(() => new NooscapeClient({ userAgent: "x", apiKey: KEY, baseUrl, fetch: fetchImpl as unknown as typeof fetch }), baseUrl).toThrow(/^baseUrl /);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not put the key in the refusal", () => {
+    try {
+      new NooscapeClient({ userAgent: "x", apiKey: KEY, baseUrl: `https://${KEY}:pw@example.test/` });
+    } catch (caught) {
+      expect(String((caught as Error).message)).not.toContain(KEY);
+      return;
+    }
+    throw new Error("expected a refusal");
+  });
+});
+
+describe("an answer that is larger than the cap", () => {
+  const encoder = new TextEncoder();
+
+  /** An answer that arrives in pieces, and counts how many pieces it was asked for and whether it was given up on. */
+  function arriving(piece: number, count: number, headers: Record<string, string> = {}) {
+    const seen = { pulled: 0, cancelled: false };
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (seen.pulled >= count) return controller.close();
+        seen.pulled += 1;
+        controller.enqueue(encoder.encode("x".repeat(piece)));
+      },
+      cancel() {
+        seen.cancelled = true;
+      },
+    });
+    return { seen, response: () => new Response(body, { status: 200, headers: { "content-type": "application/json", ...headers } }) };
+  }
+
+  it("is given up on when the cap is passed, without reading the rest", async () => {
+    const { seen, response } = arriving(100_000, 1_000);
+    const caught = await failure(() => rig(response).client.search("alice"));
+    expect(caught.kind).toBe("unexpected");
+    expect(caught.message).toContain("larger than expected");
+    expect(seen.cancelled).toBe(true);
+    expect(seen.pulled).toBeLessThanOrEqual(13);
+  });
+
+  it("is not read at all when its declared length is over the cap", async () => {
+    const { seen, response } = arriving(1_000, 1_000, { "content-length": "5000000" });
+    const caught = await failure(() => rig(response).client.search("alice"));
+    expect(caught.message).toContain("larger than expected");
+    expect(seen.cancelled).toBe(true);
+    expect(seen.pulled).toBeLessThanOrEqual(2);
+  });
+
+  it("is counted in bytes, so two-byte characters reach the cap at half as many", async () => {
+    const padded = (count: number, character: string) => `{"pad":"${character.repeat(count)}"}`;
+    const exact = padded(MAX_BODY_BYTES - 10, "a");
+    expect(new TextEncoder().encode(exact).length).toBe(MAX_BODY_BYTES);
+    expect(await rig(() => reply(200, exact)).client.search("alice")).toHaveProperty("pad");
+    const tooMany = padded(600_000, "\u00e9");
+    expect(tooMany.length).toBeLessThan(MAX_BODY_BYTES);
+    expect((await failure(() => rig(() => reply(200, tooMany)).client.search("alice"))).message).toContain("larger than expected");
+  });
+
+  it("reads a character that arrives in two pieces", async () => {
+    const bytes = encoder.encode('{"name":"caf\u00e9"}');
+    const split = bytes.indexOf(0xc3) + 1;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, split));
+        controller.enqueue(bytes.slice(split));
+        controller.close();
+      },
+    });
+    const { client } = rig(() => new Response(body, { status: 200, headers: { "content-type": "application/json" } }));
+    expect(await client.search("alice")).toEqual({ name: "caf\u00e9" });
+  });
+
+  it("says the answer was cut off when the connection breaks while it is read", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error("connection reset"));
+      },
+    });
+    const caught = await failure(() => rig(() => new Response(body, { status: 200 })).client.search("alice"));
+    expect(caught.kind).toBe("network");
+    expect(caught.message).toContain("cut off");
+    expect(caught.message).not.toContain("reset");
   });
 });
 

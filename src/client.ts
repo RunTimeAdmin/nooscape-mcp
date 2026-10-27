@@ -8,8 +8,8 @@
 
 export const DEFAULT_BASE_URL = "https://nooscape.si/api/v1";
 export const DEFAULT_TIMEOUT_MS = 15_000;
-/** The most of an answer that is read. The API's largest answers are far smaller than this. */
-export const MAX_BODY_CHARS = 1_000_000;
+/** The most of an answer that is read, in bytes. The API's largest answers are far smaller than this. */
+export const MAX_BODY_BYTES = 1_000_000;
 
 export const CHAINS = ["robinhood", "bnb", "solana", "ethereum", "base", "arc"] as const;
 export type Chain = (typeof CHAINS)[number];
@@ -72,6 +72,7 @@ export type ClientOptions = {
   /** Sent as `Authorization: Bearer`. Never logged, never echoed. */
   apiKey?: string | undefined;
   userAgent: string;
+  /** Where the API is. Only https on nooscape.si, or a local address for a test, because the key is sent there. */
   baseUrl?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
@@ -81,6 +82,55 @@ type Json = Record<string, unknown>;
 
 const isObject = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown): string | null => (typeof value === "string" && value.length > 0 ? value : null);
+
+/**
+ * Where the key may be sent: https on nooscape.si or a name under it, or a loopback address (http or https) for a server run by a test.
+ * The shipped program never passes an address, so this is for a program that builds the client itself.
+ */
+function checkedBaseUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("baseUrl is not an address.");
+  }
+  if (url.username !== "" || url.password !== "") throw new Error("baseUrl must not carry a user name or a password.");
+  const host = url.hostname.toLowerCase();
+  const ours = url.protocol === "https:" && (host === "nooscape.si" || host.endsWith(".nooscape.si"));
+  const local = (url.protocol === "https:" || url.protocol === "http:") && (host === "localhost" || host === "127.0.0.1" || host === "[::1]");
+  if (!ours && !local) throw new Error("baseUrl must be https on nooscape.si, or a local address for a test.");
+  return raw;
+}
+
+/** The answer as text, read as it arrives and given up on for good at the cap (null). A declared length over the cap is not read at all. */
+async function readCapped(response: Response): Promise<string | null> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
 
 function retryAfterOf(headers: Headers): number | null {
   const raw = headers.get("retry-after");
@@ -110,7 +160,7 @@ export class NooscapeClient {
     const key = options.apiKey?.trim();
     this.apiKey = key ? key : undefined;
     this.userAgent = options.userAgent;
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.baseUrl = checkedBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? fetch;
   }
@@ -164,13 +214,13 @@ export class NooscapeClient {
       throw new NooscapeError("network", "Could not reach the Nooscape API. Check the network connection and try again.");
     }
 
-    let raw: string;
+    let raw: string | null;
     try {
-      raw = await response.text();
+      raw = await readCapped(response);
     } catch {
       throw new NooscapeError("network", "The Nooscape API's answer was cut off. Try again.", { status: response.status });
     }
-    if (raw.length > MAX_BODY_CHARS) throw new NooscapeError("unexpected", "The Nooscape API's answer was larger than expected and was not read.", { status: response.status });
+    if (raw === null) throw new NooscapeError("unexpected", "The Nooscape API's answer was larger than expected and was not read.", { status: response.status });
 
     let parsed: unknown = null;
     try {

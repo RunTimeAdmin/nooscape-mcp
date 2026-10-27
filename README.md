@@ -22,7 +22,7 @@ Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `et
 
 ## Install
 
-Node.js 18 or later. Nothing to build: `npx` fetches it.
+Node.js 18 or later. Nothing to build: `npx` fetches it. `npx -y nooscape-mcp` runs the latest release every time it starts. To stay on one release, name it, as in `nooscape-mcp@0.4.1`.
 
 ### Claude Desktop
 
@@ -111,7 +111,8 @@ npx -y nooscape-mcp --http --port 9000
 It is stateless (each POST to `/mcp` gets its own server and answers with JSON) and is meant for trying the server locally and for hosting later. It is **not deployed anywhere** by this package. It has no sign-in of its own, so:
 
 - It listens on `127.0.0.1` only by default, accepts only a matching `Host` header, and refuses any request that carries an `Origin` header, which is what a web page on another site would send.
-- Everyone who can reach it uses the server's one `NOOSCAPE_API_KEY`. Do not put it on a public address as it is. A hosted version would need per-caller keys.
+- A `--host` that is not this machine is refused unless `--allow-remote` is also given (a container needs it, to listen inside the container). Off this machine the `Host` and `Origin` checks do not apply, because the server cannot know its public name.
+- Everyone who can reach it uses the server's one `NOOSCAPE_API_KEY`. Do not put it on a public address as it is: put something in front that signs callers in. A hosted version would need per-caller keys.
 
 ## Security notes
 
@@ -121,7 +122,7 @@ It is stateless (each POST to `/mcp` gets its own server and answers with JSON) 
 
 ## Listing in registries
 
-`server.json` is ready for the [official MCP registry](https://modelcontextprotocol.io/registry/quickstart) and `manifest.json` (an [MCPB](https://github.com/modelcontextprotocol/mcpb) manifest) for a Smithery stdio bundle. Neither has been submitted and the package has not been published. Publishing needs a public source repository.
+The package is on npm and in the official MCP registry (`io.github.RunTimeAdmin/nooscape-mcp`), which reads `server.json`. `manifest.json` is an [MCPB](https://github.com/modelcontextprotocol/mcpb) manifest, for a Smithery stdio bundle.
 
 ## Development
 

@@ -77,8 +77,13 @@ describe("what the readme promises", () => {
     expect(readme.match(/"args": \["-y", "nooscape-mcp"\]/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("says the package has not been published and the registries have not been submitted", () => {
-    expect(readme).toContain("Neither has been submitted and the package has not been published.");
+  it("says the package is on npm and in the official registry, and does not say it is unpublished", () => {
+    expect(readme).toContain("The package is on npm and in the official MCP registry");
+    expect(readme).not.toContain("has not been published");
+  });
+
+  it("shows how to stay on one release, with the release that is current", () => {
+    expect(readme).toContain(`nooscape-mcp@${pkg.version}`);
   });
 
   it("uses no long dashes", () => {
