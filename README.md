@@ -16,7 +16,7 @@ Five tools, all read-only. Each returns a short plain summary first, then the AP
 | `get_agent_history(chain, id)` | One agent's registry events and the public history of claims on it. | an API key (a free one is enough) |
 | `check(agent \| wallet \| url)` | Pre-flight facts: when each listing was first seen, recorded ownership changes, the share of ratings that were revoked, how many listings its wallet registered, and the evidence level. | a Pro key, or an x402 payment (see below) |
 
-Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `base` (Base) and `arc` (Arc). An agent's id on `robinhood`, `bnb`, `base` and `arc` is its token id (digits). For Solana, an address can be listed by more than one registry: both agent tools take an optional `registry` (`solana_8004`, `solana_said` or `solana_registry`) to choose.
+Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `ethereum` (Ethereum), `base` (Base) and `arc` (Arc). An agent's id on `robinhood`, `bnb`, `ethereum`, `base` and `arc` is its token id (digits). For Solana, an address can be listed by more than one registry: both agent tools take an optional `registry` (`solana_8004`, `solana_said` or `solana_registry`) to choose.
 
 `check` takes exactly one of `agent` (`{ chain, id }`), `wallet` or `url`. A `url` can be a full address or a bare host such as `example.com`; it is matched by its host alone and nothing is fetched from it. `chain` can narrow a `wallet` or `url`.
 
@@ -78,7 +78,7 @@ Run `npx -y nooscape-mcp` as a stdio server.
 
 - **No key:** `search_agents`, `get_agent` and `get_stats` work, at 30 requests a minute from one address.
 - **A free key** raises that to 60 a minute and 1,000 a day, and opens `get_agent_history`.
-- **`check` needs a Pro key, or an x402 payment** (currently $0.01 per call, in USDC on Arc). **This server holds no wallet and does not sign or send payments.** Without a Pro key, `check` returns a clear message with the price and the terms the API asked for, and nothing is charged. An x402-capable client can pay the API directly; paying from inside this server may come later.
+- **`check` needs a Pro key, or an x402 payment** (currently $0.01 per call, in USDC on Base or Arc). **This server holds no wallet and does not sign or send payments.** Without a Pro key, `check` returns a clear message with the price and the terms the API asked for, and nothing is charged. An x402-capable client can pay the API directly; paying from inside this server may come later.
 - A refused request is not retried. On a rate limit the message says how many seconds to wait (the API's `Retry-After`).
 - Requests time out after 15 seconds.
 

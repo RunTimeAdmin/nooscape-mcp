@@ -244,7 +244,7 @@ describe("what it will not accept", () => {
     const { client, calls } = await connect(() => reply(200, AGENT));
     const attempts = [
       { name: "search_agents", arguments: { query: "a" } },
-      { name: "search_agents", arguments: { query: "alice", chain: "ethereum" } },
+      { name: "search_agents", arguments: { query: "alice", chain: "avalanche" } },
       { name: "get_agent", arguments: { chain: "robinhood" } },
       { name: "get_agent", arguments: { chain: "robinhood", id: "1", registry: "other" } },
       { name: "get_agent_history", arguments: { chain: "polygon", id: "1" } },
@@ -331,8 +331,9 @@ describe("the check's subject", () => {
   });
 });
 
-describe("Base and Arc", () => {
+describe("Ethereum, Base and Arc", () => {
   const arcAgent = { ...AGENT, data: { ...AGENT.data, chain: "arc", agent_id: "1", registry: "erc8004_arc", name: "Agent #1" } };
+  const ethereumAgent = { ...AGENT, data: { ...AGENT.data, chain: "ethereum", agent_id: "55441", registry: "erc8004_eth", name: "Agent #55441" } };
 
   it("get_agent takes them and names the chain in the summary", async () => {
     const { client, calls } = await connect(() => reply(200, arcAgent));
@@ -345,22 +346,35 @@ describe("Base and Arc", () => {
     expect(calls[1]!.url).toBe("https://nooscape.si/api/v1/agents/base/42");
   });
 
+  it("get_agent takes Ethereum and says Ethereum in the summary, not the lower-case key", async () => {
+    const { client, calls } = await connect(() => reply(200, ethereumAgent));
+    const result = await client.callTool({ name: "get_agent", arguments: { chain: "ethereum", id: "55441" } });
+    expect(isError(result)).toBe(false);
+    expect(textOf(result)).toContain("Ethereum agent 55441");
+    expect(textOf(result)).not.toContain("ethereum agent");
+    expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/ethereum/55441");
+  });
+
   it("search_agents and check take them too", async () => {
     const { client, calls } = await connect(() => reply(200, SEARCH));
     expect(isError(await client.callTool({ name: "search_agents", arguments: { query: "agent", chain: "base" } }))).toBe(false);
     expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/search?q=agent&chain=base");
     await client.callTool({ name: "check", arguments: { agent: { chain: "arc", id: "1" } } });
     expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ agent: { chain: "arc", id: "1" } });
+    expect(isError(await client.callTool({ name: "search_agents", arguments: { query: "agent", chain: "ethereum" } }))).toBe(false);
+    expect(calls[2]!.url).toBe("https://nooscape.si/api/v1/agents/search?q=agent&chain=ethereum");
+    await client.callTool({ name: "check", arguments: { agent: { chain: "ethereum", id: "55441" } } });
+    expect(JSON.parse(String(calls[3]!.init.body))).toEqual({ agent: { chain: "ethereum", id: "55441" } });
   });
 
   it("still refuses a chain the API does not serve, before any request is made", async () => {
     const { client, calls } = await connect(() => reply(200, AGENT));
-    const result = await client.callTool({ name: "get_agent", arguments: { chain: "ethereum", id: "1" } });
+    const result = await client.callTool({ name: "get_agent", arguments: { chain: "polygon", id: "1" } });
     expect(isError(result)).toBe(true);
     expect(calls).toHaveLength(0);
   });
 
   it("says in its instructions which chains it reads", () => {
-    expect(INSTRUCTIONS).toContain("Robinhood Chain, BNB Smart Chain, Solana, Base and Arc");
+    expect(INSTRUCTIONS).toContain("Robinhood Chain, BNB Smart Chain, Solana, Ethereum, Base and Arc");
   });
 });

@@ -18,7 +18,7 @@ const str = (value: unknown): string | null => (typeof value === "string" && val
 const num = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
 const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
-const CHAIN_LABEL: Record<string, string> = { robinhood: "Robinhood Chain", bnb: "BNB Smart Chain", solana: "Solana", base: "Base", arc: "Arc" };
+const CHAIN_LABEL: Record<string, string> = { robinhood: "Robinhood Chain", bnb: "BNB Smart Chain", solana: "Solana", ethereum: "Ethereum", base: "Base", arc: "Arc" };
 const chainLabel = (chain: unknown) => (typeof chain === "string" ? (CHAIN_LABEL[chain] ?? chain) : "an unknown chain");
 
 /** The date part and the time of an ISO string, as the API gave it. */

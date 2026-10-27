@@ -257,19 +257,23 @@ describe("a price in dollars", () => {
 });
 
 describe("the chains it names", () => {
-  it("looks Base and Arc agents up by their token id, and searches inside one of them", async () => {
+  it("looks Ethereum, Base and Arc agents up by their token id, and searches inside two of them", async () => {
     const { client, calls } = rig(() => reply(200, AGENT));
+    await client.agent("ethereum", "55441");
     await client.agent("base", "42");
     await client.agent("arc", "1");
     await client.search("agent", "arc");
+    await client.search("agent", "ethereum");
     expect(calls.map(call => call.url)).toEqual([
+      "https://nooscape.si/api/v1/agents/ethereum/55441",
       "https://nooscape.si/api/v1/agents/base/42",
       "https://nooscape.si/api/v1/agents/arc/1",
       "https://nooscape.si/api/v1/agents/search?q=agent&chain=arc",
+      "https://nooscape.si/api/v1/agents/search?q=agent&chain=ethereum",
     ]);
   });
 
-  it("offers exactly the five chains the API serves", () => {
-    expect([...CHAINS]).toEqual(["robinhood", "bnb", "solana", "base", "arc"]);
+  it("offers exactly the six chains the API serves", () => {
+    expect([...CHAINS]).toEqual(["robinhood", "bnb", "solana", "ethereum", "base", "arc"]);
   });
 });

@@ -59,8 +59,8 @@ else check("check without a key shows the 402 as a message with the price", /x40
 const both = await client.callTool({ name: "check", arguments: { wallet: "0x0000000000000000000000000000000000000001", agent: { chain: "robinhood", id: "1" } } });
 check("check needs exactly one subject", both.isError === true && /exactly one/.test(text(both)), first(both));
 
-// Base and Arc: a search inside the chain, then the first listed agent looked up and the chain named in the summary.
-for (const [chainName, label] of [["base", "Base"], ["arc", "Arc"]]) {
+// Ethereum, Base and Arc: a search inside the chain, then the first listed agent looked up and the chain named in the summary.
+for (const [chainName, label] of [["ethereum", "Ethereum"], ["base", "Base"], ["arc", "Arc"]]) {
   const found = await client.callTool({ name: "search_agents", arguments: { query: "agent", chain: chainName } });
   const results = found.isError ? [] : JSON.parse(found.content[1].text).data.results;
   check(`search_agents finds listed agents on ${label}`, results.length > 0, first(found));

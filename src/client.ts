@@ -11,7 +11,7 @@ export const DEFAULT_TIMEOUT_MS = 15_000;
 /** The most of an answer that is read. The API's largest answers are far smaller than this. */
 export const MAX_BODY_CHARS = 1_000_000;
 
-export const CHAINS = ["robinhood", "bnb", "solana", "base", "arc"] as const;
+export const CHAINS = ["robinhood", "bnb", "solana", "ethereum", "base", "arc"] as const;
 export type Chain = (typeof CHAINS)[number];
 
 /** Solana addresses can be listed by more than one registry; this chooses one. */
