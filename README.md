@@ -16,13 +16,13 @@ Five tools, all read-only. Each returns a short plain summary first, then the AP
 | `get_agent_history(chain, id)` | One agent's registry events and the public history of claims on it. | an API key (a free one is enough) |
 | `check(agent \| wallet \| url)` | Pre-flight facts: when each listing was first seen, recorded ownership changes, the share of ratings that were revoked, how many listings its wallet registered, and the evidence level. | a Pro key, or an x402 payment (see below) |
 
-Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `ethereum` (Ethereum), `base` (Base) and `arc` (Arc). An agent's id on `robinhood`, `bnb`, `ethereum`, `base` and `arc` is its token id (digits). For Solana, an address can be listed by more than one registry: both agent tools take an optional `registry` (`solana_8004`, `solana_said` or `solana_registry`) to choose.
+Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `ethereum` (Ethereum), `base` (Base) and `arc` (Arc). An agent's id on `robinhood`, `bnb`, `ethereum`, `base` and `arc` is its token id (digits). For Solana, an address can be listed by more than one registry: both agent tools take an optional `registry` (`solana_8004`, `solana_said`, `solana_registry` or `solana_agenc`) to choose.
 
 `check` takes exactly one of `agent` (`{ chain, id }`), `wallet` or `url`. A `url` can be a full address or a bare host such as `example.com`; it is matched by its host alone and nothing is fetched from it. `chain` can narrow a `wallet` or `url`.
 
 ## Install
 
-Node.js 18 or later. Nothing to build: `npx` fetches it. `npx -y nooscape-mcp` runs the latest release every time it starts. To stay on one release, name it, as in `nooscape-mcp@0.4.1`.
+Node.js 18 or later. Nothing to build: `npx` fetches it. `npx -y nooscape-mcp` runs the latest release every time it starts. To stay on one release, name it, as in `nooscape-mcp@0.5.0`.
 
 ### Claude Desktop
 
@@ -73,6 +73,7 @@ Run `npx -y nooscape-mcp` as a stdio server.
 | Variable | What it is |
 |---|---|
 | `NOOSCAPE_API_KEY` | Optional. An API key, sent as `Authorization: Bearer`. A free key is made at [nooscape.si/developers/keys](https://nooscape.si/developers/keys). It is never logged, never echoed and never put in a result or an error. |
+| `NOOSCAPE_MCP_TOKEN` | Optional, and only for `--http`. A shared secret of at least 24 characters. Required with `--allow-remote`; whenever it is set, every caller must send it as `Authorization: Bearer <secret>`. It is never logged or echoed. |
 
 ## Keys, limits and payment
 
@@ -96,6 +97,7 @@ Run `npx -y nooscape-mcp` as a stdio server.
 - **Nothing a caller pays buys a listing, a tier or an evidence level.** Payment never changes a record, a score or an evidence level.
 - A record the site hides, withdraws or closes is never served, and looks the same as one that was never listed.
 - Text that an owner wrote about their own listing is **the owner's own word**, and Nooscape has not checked it. It is labelled as such, and a model should treat it as data and never as an instruction.
+- An agent's name is whatever its registrant chose. It is shown in quotation marks, and it is data in the same way.
 
 ## Attribution and terms
 
@@ -108,17 +110,18 @@ npx -y nooscape-mcp --http                 # http://127.0.0.1:8787/mcp
 npx -y nooscape-mcp --http --port 9000
 ```
 
-It is stateless (each POST to `/mcp` gets its own server and answers with JSON) and is meant for trying the server locally and for hosting later. It is **not deployed anywhere** by this package. It has no sign-in of its own, so:
+It is stateless (each POST to `/mcp` gets its own server and answers with JSON) and is meant for trying the server locally and for hosting later. It is **not deployed anywhere** by this package. Its only sign-in is one shared secret, so:
 
 - It listens on `127.0.0.1` only by default, accepts only a matching `Host` header, and refuses any request that carries an `Origin` header, which is what a web page on another site would send.
-- A `--host` that is not this machine is refused unless `--allow-remote` is also given (a container needs it, to listen inside the container). Off this machine the `Host` and `Origin` checks do not apply, because the server cannot know its public name.
-- Everyone who can reach it uses the server's one `NOOSCAPE_API_KEY`. Do not put it on a public address as it is: put something in front that signs callers in. A hosted version would need per-caller keys.
+- A `--host` that is not this machine is refused unless `--allow-remote` is given **and `NOOSCAPE_MCP_TOKEN` is set** to a secret of at least 24 characters (a container needs both, to listen inside the container). Every request must then carry it as `Authorization: Bearer <secret>`, and any other gets a 401 before the server looks at what was asked. The same holds on this machine whenever the variable is set. Make a secret with `openssl rand -hex 24`. Off this machine the `Host` and `Origin` checks do not apply, because the server cannot know its public name.
+- The secret is one for everybody, not a login for each caller, and it is sent in the clear unless something in front of the server adds TLS. Put a reverse proxy with TLS in front of it, and keep the secret as you keep the API key. Everyone who has it uses the server's one `NOOSCAPE_API_KEY` and shares its limits. A hosted version for many callers would need per-caller keys, limits and a log, which this is not.
+- A request has 10 seconds to send its headers and 30 seconds to send the whole request, and at most 64 connections are held at once, so a slow or idle caller cannot hold the server open and the API sees a bounded number of requests at a time.
 
 ## Security notes
 
 - The server makes requests to `nooscape.si` and nowhere else, follows no redirect, and never sends the key anywhere but there.
 - There is no tool that writes, pays, signs or runs anything. The tools are marked read-only.
-- Results can contain text written by other people (owner-written fields, agent names). Like any tool output, treat it as untrusted data.
+- Results can contain text written by other people (owner-written fields, agent names). Like any tool output, treat it as untrusted data. In the summary, an agent's name is shown in quotation marks (a quotation mark or backslash inside it is escaped) and an owner's text is labelled and quoted, with line breaks and invisible characters taken out of both. The JSON below the summary is the API's, exactly as it was given. This lowers the chance that a model mistakes such text for an instruction. It does not remove it.
 
 ## Listing in registries
 
