@@ -1,4 +1,4 @@
-import { request } from "node:http";
+import { request, type IncomingHttpHeaders } from "node:http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -14,21 +14,21 @@ afterEach(async () => {
   await Promise.all(running.splice(0).map(close => close()));
 });
 
-async function start(host = "127.0.0.1") {
+async function start(host = "127.0.0.1", token?: string) {
   const fetchImpl = vi.fn(async () => new Response(JSON.stringify(AGENT), { status: 200, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
   const api = new NooscapeClient({ userAgent: "nooscape-mcp/test", fetch: fetchImpl, apiKey: KEY });
-  const http = await startHttp({ port: 0, host, makeServer: () => createNooscapeServer(api) });
+  const http = await startHttp({ port: 0, host, makeServer: () => createNooscapeServer(api), token });
   running.push(http.close);
   return { http, url: `http://127.0.0.1:${http.port}/mcp`, fetchImpl };
 }
 
 /** A raw request, so the Host header can be chosen. */
 function raw(port: number, options: { method?: string; path?: string; headers?: Record<string, string>; body?: string }) {
-  return new Promise<{ status: number; body: string }>((resolve, reject) => {
+  return new Promise<{ status: number; body: string; headers: IncomingHttpHeaders }>((resolve, reject) => {
     const req = request({ host: "127.0.0.1", port, method: options.method ?? "POST", path: options.path ?? "/mcp", headers: options.headers }, res => {
       let body = "";
       res.on("data", chunk => (body += chunk));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body, headers: res.headers }));
     });
     req.on("error", reject);
     req.end(options.body);
@@ -113,5 +113,67 @@ describe("the Streamable HTTP mode", () => {
     expect(isLoopback("192.168.1.5")).toBe(false);
     const { http } = await start();
     expect((http.server.address() as { address: string }).address).toBe("127.0.0.1");
+  });
+});
+
+describe("the shared token", () => {
+  const TOKEN = "s".repeat(32);
+  const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+
+  it("turns away a request that does not carry it, whatever it asks for, and says how to sign in", async () => {
+    const { http } = await start("127.0.0.1", TOKEN);
+    const host = `127.0.0.1:${http.port}`;
+    const wrong = [{}, bearer("wrong"), bearer(TOKEN.slice(0, -1)), bearer(`${TOKEN}x`), bearer(""), { authorization: TOKEN }, { authorization: `Basic ${TOKEN}` }];
+    for (const extra of wrong) {
+      const result = await raw(http.port, { headers: jsonHeaders({ host, ...extra }), body: rpc });
+      expect(result.status, JSON.stringify(extra)).toBe(401);
+      expect(result.headers["www-authenticate"]).toBe('Bearer realm="nooscape-mcp"');
+      expect(JSON.parse(result.body).error.code).toBe(-32000);
+    }
+    // The token comes before the path and the method, so a caller without it cannot tell a real path from a made up one.
+    expect((await raw(http.port, { path: "/", headers: jsonHeaders({ host }), body: rpc })).status).toBe(401);
+    expect((await raw(http.port, { path: "/mcp/extra", headers: jsonHeaders({ host }), body: rpc })).status).toBe(401);
+    expect((await raw(http.port, { method: "GET", headers: { host } })).status).toBe(401);
+  });
+
+  it("serves a request that carries it, however the scheme is written", async () => {
+    const { http, fetchImpl } = await start("127.0.0.1", TOKEN);
+    const host = `127.0.0.1:${http.port}`;
+    for (const scheme of ["Bearer", "bearer", "BEARER"]) {
+      const result = await raw(http.port, { headers: jsonHeaders({ host, authorization: `${scheme} ${TOKEN}` }), body: rpc });
+      expect(result.status, scheme).toBe(200);
+      expect(JSON.parse(result.body).result.tools).toHaveLength(5);
+    }
+    const call = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_agent", arguments: { chain: "robinhood", id: "8865" } } });
+    expect((await raw(http.port, { headers: jsonHeaders({ host, ...bearer(TOKEN) }), body: call })).status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("is sent by a real MCP client that was given it, and without it that client cannot connect", async () => {
+    const { url } = await start("127.0.0.1", TOKEN);
+    const client = new Client({ name: "http-test", version: "1.0.0" });
+    await client.connect(new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: bearer(TOKEN) } }));
+    expect((await client.listTools()).tools).toHaveLength(5);
+    await client.close();
+    const stranger = new Client({ name: "http-test", version: "1.0.0" });
+    await expect(stranger.connect(new StreamableHTTPClientTransport(new URL(url)))).rejects.toThrow();
+  });
+
+  it("keeps the Origin check on this machine ahead of it, so a web page is refused even with the token", async () => {
+    const { http } = await start("127.0.0.1", TOKEN);
+    const result = await raw(http.port, { headers: jsonHeaders({ host: `127.0.0.1:${http.port}`, origin: "https://evil.example", ...bearer(TOKEN) }), body: rpc });
+    expect(result.status).toBe(403);
+  });
+
+  it("is not in anything it answers, and the key is not either", async () => {
+    const { http } = await start("127.0.0.1", TOKEN);
+    const host = `127.0.0.1:${http.port}`;
+    const call = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_agent", arguments: { chain: "robinhood", id: "8865" } } });
+    const answers = [await raw(http.port, { headers: jsonHeaders({ host }), body: rpc }), await raw(http.port, { headers: jsonHeaders({ host, ...bearer(TOKEN) }), body: call }), await raw(http.port, { headers: jsonHeaders({ host, ...bearer("wrong") }), body: rpc })];
+    for (const answer of answers) {
+      expect(answer.body).not.toContain(TOKEN);
+      expect(answer.body).not.toContain(KEY);
+      expect(JSON.stringify(answer.headers)).not.toContain(TOKEN);
+    }
   });
 });

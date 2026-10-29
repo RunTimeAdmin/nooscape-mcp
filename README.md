@@ -73,6 +73,7 @@ Run `npx -y nooscape-mcp` as a stdio server.
 | Variable | What it is |
 |---|---|
 | `NOOSCAPE_API_KEY` | Optional. An API key, sent as `Authorization: Bearer`. A free key is made at [nooscape.si/developers/keys](https://nooscape.si/developers/keys). It is never logged, never echoed and never put in a result or an error. |
+| `NOOSCAPE_MCP_TOKEN` | Optional, and only for `--http`. A shared secret of at least 24 characters. Required with `--allow-remote`; whenever it is set, every caller must send it as `Authorization: Bearer <secret>`. It is never logged or echoed. |
 
 ## Keys, limits and payment
 
@@ -108,11 +109,11 @@ npx -y nooscape-mcp --http                 # http://127.0.0.1:8787/mcp
 npx -y nooscape-mcp --http --port 9000
 ```
 
-It is stateless (each POST to `/mcp` gets its own server and answers with JSON) and is meant for trying the server locally and for hosting later. It is **not deployed anywhere** by this package. It has no sign-in of its own, so:
+It is stateless (each POST to `/mcp` gets its own server and answers with JSON) and is meant for trying the server locally and for hosting later. It is **not deployed anywhere** by this package. Its only sign-in is one shared secret, so:
 
 - It listens on `127.0.0.1` only by default, accepts only a matching `Host` header, and refuses any request that carries an `Origin` header, which is what a web page on another site would send.
-- A `--host` that is not this machine is refused unless `--allow-remote` is also given (a container needs it, to listen inside the container). Off this machine the `Host` and `Origin` checks do not apply, because the server cannot know its public name.
-- Everyone who can reach it uses the server's one `NOOSCAPE_API_KEY`. Do not put it on a public address as it is: put something in front that signs callers in. A hosted version would need per-caller keys.
+- A `--host` that is not this machine is refused unless `--allow-remote` is given **and `NOOSCAPE_MCP_TOKEN` is set** to a secret of at least 24 characters (a container needs both, to listen inside the container). Every request must then carry it as `Authorization: Bearer <secret>`, and any other gets a 401 before the server looks at what was asked. The same holds on this machine whenever the variable is set. Make a secret with `openssl rand -hex 24`. Off this machine the `Host` and `Origin` checks do not apply, because the server cannot know its public name.
+- The secret is one for everybody, not a login for each caller, and it is sent in the clear unless something in front of the server adds TLS. Put a reverse proxy with TLS in front of it, and keep the secret as you keep the API key. Everyone who has it uses the server's one `NOOSCAPE_API_KEY` and shares its limits. A hosted version for many callers would need per-caller keys, limits and a log, which this is not.
 
 ## Security notes
 

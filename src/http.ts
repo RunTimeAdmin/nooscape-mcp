@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -8,9 +9,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
  * between requests and there is no session to steal. It is for trying the server locally and for hosting later, and it is NOT deployed
  * anywhere by this package.
  *
- * It has no sign-in of its own. By default it listens on 127.0.0.1 only, accepts only a Host header for that address and refuses any request
- * that carries an Origin header (a browser page on another site), which is what stops a web page from reaching a local server. Anyone who can
- * reach it uses the server's one API key, so it must not be put on a public address as it is.
+ * It has no sign-in beyond one shared secret, and that is optional on this machine. By default it listens on 127.0.0.1 only, accepts only a Host
+ * header for that address and refuses any request that carries an Origin header (a browser page on another site), which is what stops a web
+ * page from reaching a local server. Anyone who can reach it uses the server's one API key, so off this machine it needs the secret (the
+ * command line insists on it) and something in front of it that adds TLS, because the secret travels in the clear otherwise.
  */
 
 const MAX_BODY_BYTES = 1_000_000;
@@ -20,7 +22,11 @@ export type HttpOptions = {
   host: string;
   /** A new server for every request. */
   makeServer: () => McpServer;
+  /** When given, every request must carry it as `Authorization: Bearer <token>`, on any address. */
+  token?: string | undefined;
 };
+
+const digest = (value: string) => createHash("sha256").update(value).digest();
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
 export const isLoopback = (host: string) => LOOPBACK.has(host);
@@ -49,6 +55,12 @@ async function readJson(req: IncomingMessage): Promise<{ ok: true; body: unknown
 
 export function startHttp(options: HttpOptions): Promise<{ server: Server; port: number; close: () => Promise<void> }> {
   const guarded = isLoopback(options.host);
+  const wanted = options.token === undefined ? null : digest(options.token);
+  /** Whether the request carries the token. Both sides are hashed first, so the comparison takes the same time for any input. */
+  const signedIn = (req: IncomingMessage) => {
+    const given = /^Bearer[ \t]+(.+)$/i.exec(req.headers.authorization ?? "")?.[1];
+    return wanted === null || (given !== undefined && timingSafeEqual(digest(given), wanted));
+  };
   const server = createServer(async (req, res) => {
     try {
       if (guarded) {
@@ -58,6 +70,8 @@ export function startHttp(options: HttpOptions): Promise<{ server: Server; port:
         const hostHeader = (req.headers.host ?? "").toLowerCase();
         if (![`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(hostHeader)) return send(res, 403, rpcError(-32000, "The Host header is not this server's address."));
       }
+      // Before the path is looked at, so a caller without the token learns nothing else about the server.
+      if (!signedIn(req)) return send(res, 401, rpcError(-32000, "Send this server's token as Authorization: Bearer <token>."), { "www-authenticate": 'Bearer realm="nooscape-mcp"' });
       const path = new URL(req.url ?? "/", "http://localhost").pathname;
       if (path !== "/mcp") return send(res, 404, rpcError(-32000, "Not found. The MCP endpoint is /mcp."));
       if (req.method !== "POST") return send(res, 405, rpcError(-32000, "Method not allowed. This server is stateless: POST JSON-RPC to /mcp."), { allow: "POST" });
