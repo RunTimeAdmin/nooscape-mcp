@@ -16,6 +16,14 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
  */
 
 const MAX_BODY_BYTES = 1_000_000;
+/**
+ * Every request this server accepts makes one to the API with the server's one key, so the time a caller may take to send a request and the
+ * number of connections it may hold are bounded. Node's own defaults (a minute for the headers, five minutes for the request, no cap on
+ * connections) are looser than a server of this size needs.
+ */
+export const HEADERS_TIMEOUT_MS = 10_000;
+export const REQUEST_TIMEOUT_MS = 30_000;
+export const MAX_CONNECTIONS = 64;
 
 export type HttpOptions = {
   port: number;
@@ -92,6 +100,10 @@ export function startHttp(options: HttpOptions): Promise<{ server: Server; port:
       else res.end();
     }
   });
+
+  server.headersTimeout = HEADERS_TIMEOUT_MS;
+  server.requestTimeout = REQUEST_TIMEOUT_MS;
+  server.maxConnections = MAX_CONNECTIONS;
 
   return new Promise((resolve, reject) => {
     server.once("error", reject);

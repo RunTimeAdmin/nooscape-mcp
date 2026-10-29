@@ -114,6 +114,7 @@ It is stateless (each POST to `/mcp` gets its own server and answers with JSON) 
 - It listens on `127.0.0.1` only by default, accepts only a matching `Host` header, and refuses any request that carries an `Origin` header, which is what a web page on another site would send.
 - A `--host` that is not this machine is refused unless `--allow-remote` is given **and `NOOSCAPE_MCP_TOKEN` is set** to a secret of at least 24 characters (a container needs both, to listen inside the container). Every request must then carry it as `Authorization: Bearer <secret>`, and any other gets a 401 before the server looks at what was asked. The same holds on this machine whenever the variable is set. Make a secret with `openssl rand -hex 24`. Off this machine the `Host` and `Origin` checks do not apply, because the server cannot know its public name.
 - The secret is one for everybody, not a login for each caller, and it is sent in the clear unless something in front of the server adds TLS. Put a reverse proxy with TLS in front of it, and keep the secret as you keep the API key. Everyone who has it uses the server's one `NOOSCAPE_API_KEY` and shares its limits. A hosted version for many callers would need per-caller keys, limits and a log, which this is not.
+- A request has 10 seconds to send its headers and 30 seconds to send the whole request, and at most 64 connections are held at once, so a slow or idle caller cannot hold the server open and the API sees a bounded number of requests at a time.
 
 ## Security notes
 

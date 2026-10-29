@@ -1,9 +1,10 @@
 import { request, type IncomingHttpHeaders } from "node:http";
+import { connect, type Socket } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NooscapeClient } from "../src/client.js";
-import { isLoopback, startHttp } from "../src/http.js";
+import { HEADERS_TIMEOUT_MS, MAX_CONNECTIONS, REQUEST_TIMEOUT_MS, isLoopback, startHttp } from "../src/http.js";
 import { createNooscapeServer } from "../src/server.js";
 import { AGENT } from "./fixtures.js";
 
@@ -113,6 +114,47 @@ describe("the Streamable HTTP mode", () => {
     expect(isLoopback("192.168.1.5")).toBe(false);
     const { http } = await start();
     expect((http.server.address() as { address: string }).address).toBe("127.0.0.1");
+  });
+});
+
+describe("the limits on a caller", () => {
+  const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const open = (port: number) => new Promise<Socket>((resolve, reject) => {
+    const socket = connect(port, "127.0.0.1", () => resolve(socket));
+    socket.once("error", reject);
+  });
+
+  it("gives a request a short time to arrive, with Node's own defaults far looser", async () => {
+    const { http } = await start();
+    expect(http.server.headersTimeout).toBe(HEADERS_TIMEOUT_MS);
+    expect(http.server.requestTimeout).toBe(REQUEST_TIMEOUT_MS);
+    expect(HEADERS_TIMEOUT_MS).toBeLessThanOrEqual(REQUEST_TIMEOUT_MS);
+    expect(REQUEST_TIMEOUT_MS).toBeLessThanOrEqual(60_000);
+  });
+
+  it("holds a bounded number of connections: one over the cap is dropped, and one is accepted again when a place is freed", async () => {
+    const { http } = await start();
+    expect(http.server.maxConnections).toBe(MAX_CONNECTIONS);
+    const held = await Promise.all(Array.from({ length: MAX_CONNECTIONS }, () => open(http.port)));
+    try {
+      // The server counts a connection when it accepts it, a moment after the caller sees it open.
+      for (let tries = 0; tries < 100; tries += 1) {
+        const count = await new Promise<number>(resolve => http.server.getConnections((_error, number) => resolve(number)));
+        if (count >= MAX_CONNECTIONS) break;
+        await pause(20);
+      }
+      const headers = jsonHeaders({ host: `127.0.0.1:${http.port}` });
+      await expect(raw(http.port, { headers, body: rpc })).rejects.toThrow();
+      held.pop()!.destroy();
+      let status = 0;
+      for (let tries = 0; status !== 200 && tries < 100; tries += 1) {
+        status = await raw(http.port, { headers, body: rpc }).then(result => result.status, () => 0);
+        if (status !== 200) await pause(20);
+      }
+      expect(status).toBe(200);
+    } finally {
+      for (const socket of held) socket.destroy();
+    }
   });
 });
 
