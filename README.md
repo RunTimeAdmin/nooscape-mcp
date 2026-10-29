@@ -22,7 +22,7 @@ Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `et
 
 ## Install
 
-Node.js 18 or later. Nothing to build: `npx` fetches it. `npx -y nooscape-mcp` runs the latest release every time it starts. To stay on one release, name it, as in `nooscape-mcp@0.4.1`.
+Node.js 18 or later. Nothing to build: `npx` fetches it. `npx -y nooscape-mcp` runs the latest release every time it starts. To stay on one release, name it, as in `nooscape-mcp@0.5.0`.
 
 ### Claude Desktop
 
