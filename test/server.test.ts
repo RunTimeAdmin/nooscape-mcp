@@ -268,6 +268,19 @@ describe("what it will not accept", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("takes AgenC as the Solana registry on both agent tools and on the check", async () => {
+    const { client, calls } = await connect(() => reply(200, AGENT));
+    const { tools } = await client.listTools();
+    for (const name of ["get_agent", "get_agent_history"]) {
+      const registry = (tools.find(tool => tool.name === name)!.inputSchema.properties as Record<string, { enum?: string[] }>).registry;
+      expect(registry?.enum, name).toEqual(["solana_8004", "solana_said", "solana_registry", "solana_agenc"]);
+    }
+    for (const name of ["get_agent", "get_agent_history"]) expect(isError(await client.callTool({ name, arguments: { chain: "solana", id: "So1", registry: "solana_agenc" } })), name).toBe(false);
+    expect(isError(await client.callTool({ name: "check", arguments: { agent: { chain: "solana", id: "So1", registry: "solana_agenc" } } }))).toBe(false);
+    expect(calls.map(call => call.url)).toEqual(["https://nooscape.si/api/v1/agents/solana/So1?registry=solana_agenc", "https://nooscape.si/api/v1/agents/solana/So1/history?registry=solana_agenc", "https://nooscape.si/api/v1/check"]);
+    expect(JSON.parse(String(calls[2]!.init.body))).toEqual({ agent: { chain: "solana", id: "So1", registry: "solana_agenc" } });
+  });
+
   it("has no tool that writes, pays or signs", async () => {
     const { client } = await connect(() => reply(200, AGENT));
     const { tools } = await client.listTools();

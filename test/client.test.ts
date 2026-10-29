@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CHAINS, MAX_BODY_BYTES, NooscapeClient, NooscapeError, usdOf, type ClientOptions } from "../src/client.js";
+import { CHAINS, MAX_BODY_BYTES, NooscapeClient, NooscapeError, SOLANA_REGISTRIES, usdOf, type ClientOptions } from "../src/client.js";
 import { AGENT, CHECK, PAYMENT_REQUIRED, STATS, error } from "./fixtures.js";
 
 const KEY = "nsk_" + "k".repeat(40);
@@ -63,6 +63,17 @@ describe("what is sent", () => {
     expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/search?q=a+b%26c%3Dd&chain=solana");
     expect(calls[1]!.url).toBe("https://nooscape.si/api/v1/agents/solana/ab%2Fcd%3Fx?registry=solana_said");
     expect(calls[2]!.url).toBe("https://nooscape.si/api/v1/agents/robinhood/8865/history");
+  });
+
+  it("passes each of the four Solana registries on, AgenC included, to the agent, the history and the check", async () => {
+    const { client, calls } = rig(() => reply(200, AGENT));
+    expect(SOLANA_REGISTRIES).toEqual(["solana_8004", "solana_said", "solana_registry", "solana_agenc"]);
+    for (const registry of SOLANA_REGISTRIES) await client.agent("solana", "So1", registry);
+    await client.history("solana", "So1", "solana_agenc");
+    await client.check({ agent: { chain: "solana", id: "So1", registry: "solana_agenc" } });
+    expect(calls.slice(0, 4).map(call => call.url)).toEqual(SOLANA_REGISTRIES.map(registry => `https://nooscape.si/api/v1/agents/solana/So1?registry=${registry}`));
+    expect(calls[4]!.url).toBe("https://nooscape.si/api/v1/agents/solana/So1/history?registry=solana_agenc");
+    expect(JSON.parse(String(calls[5]!.init.body))).toEqual({ agent: { chain: "solana", id: "So1", registry: "solana_agenc" } });
   });
 
   it("asks for the stats with a plain GET: no body, no query, and the key only when there is one", async () => {
@@ -262,6 +273,13 @@ describe("what comes back", () => {
     expect(caught.registries).toEqual(["solana_8004", "solana_said"]);
     expect(caught.message).toContain("solana_8004, solana_said");
     expect(caught.message).toContain("registry argument");
+  });
+
+  it("can be told every registry the API names in that answer, so a caller is never asked to say what it cannot", async () => {
+    const named = ["solana_8004", "solana_said", "solana_registry", "solana_agenc"];
+    const caught = await failure(() => rig(() => reply(409, error("ambiguous", "x", { registries: named }))).client.agent("solana", "So1"));
+    expect(caught.registries).toEqual(named);
+    for (const registry of caught.registries ?? []) expect(SOLANA_REGISTRIES, registry).toContain(registry);
   });
 
   it("passes on Retry-After for a 429, once, with no retry loop", async () => {

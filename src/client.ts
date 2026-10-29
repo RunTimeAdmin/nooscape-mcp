@@ -15,7 +15,7 @@ export const CHAINS = ["robinhood", "bnb", "solana", "ethereum", "base", "arc"] 
 export type Chain = (typeof CHAINS)[number];
 
 /** Solana addresses can be listed by more than one registry; this chooses one. */
-export const SOLANA_REGISTRIES = ["solana_8004", "solana_said", "solana_registry"] as const;
+export const SOLANA_REGISTRIES = ["solana_8004", "solana_said", "solana_registry", "solana_agenc"] as const;
 export type SolanaRegistry = (typeof SOLANA_REGISTRIES)[number];
 
 export type ErrorKind =
