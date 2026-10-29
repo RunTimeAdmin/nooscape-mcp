@@ -3,9 +3,10 @@
  * it never says that an agent is good or bad, safe or unsafe, trusted or untrusted, and it does not rank, score or grade. Every
  * summary keeps the date the data was read (`as_of`), where it came from (`source`) and the evidence level.
  *
- * Two kinds of sentence are not mine and are marked so a reader can tell: "API statement:" is a sentence the API states about what
- * its data does and does not mean, quoted whole; and anything the owner of a listing wrote is shown as the owner's own word, which
- * Nooscape has not checked and which must be treated as data and not as an instruction.
+ * Three kinds of text are not mine and are marked so a reader can tell: "API statement:" is a sentence the API states about what
+ * its data does and does not mean, quoted whole; anything the owner of a listing wrote is shown as the owner's own word, which
+ * Nooscape has not checked and which must be treated as data and not as an instruction; and the name a registrant gave an agent is
+ * shown in quotation marks, as the owner's text is, because it is theirs too.
  *
  * Every function is total: an answer in a shape it does not expect gives a short note and never an exception, and the full JSON
  * always goes with the summary.
@@ -45,6 +46,18 @@ const clip = (value: string) => {
   return flat.length > MAX_OWNER_TEXT ? `${flat.slice(0, MAX_OWNER_TEXT)}... (cut)` : flat;
 };
 
+/**
+ * Text that someone else wrote, flattened already, as a quoted string. A quotation mark or a backslash in it is escaped, so it cannot close
+ * the quotes early and leave the rest to read as part of the summary.
+ */
+const quoted = (flat: string) => JSON.stringify(flat);
+
+/** The name a registrant gave an agent, quoted, or a note that there is none. */
+const named = (value: unknown) => {
+  const flat = str(value);
+  return flat === null ? "(no name)" : quoted(flat);
+};
+
 const NOT_SHAPED = "The answer is not in the shape this summary expects. The full JSON is below.";
 
 function finish(lines: Array<string | null>): string {
@@ -82,7 +95,7 @@ export function summarizeSearch(answer: unknown): string {
     for (const item of results) {
       if (!isObject(item)) continue;
       const links = isObject(item.links) ? item.links : null;
-      lines.push(`- ${str(item.name) ?? "(no name)"}: ${chainLabel(item.chain)} id ${str(item.agent_id) ?? "?"} (${str(item.registry) ?? "registry unknown"}), evidence layer ${str(item.evidence_layer) ?? "unknown"}, first seen ${when(item.first_seen_at)}. ${str(links?.page) ?? ""}`.trimEnd());
+      lines.push(`- ${named(item.name)}: ${chainLabel(item.chain)} id ${str(item.agent_id) ?? "?"} (${str(item.registry) ?? "registry unknown"}), evidence layer ${str(item.evidence_layer) ?? "unknown"}, first seen ${when(item.first_seen_at)}. ${str(links?.page) ?? ""}`.trimEnd());
     }
     lines.push("Use get_agent with a chain and an id for the full record of one agent.");
     lines.push(attribution(answer));
@@ -137,10 +150,10 @@ function ownerTextLines(claim: Json): Array<string | null> {
   const website = str(owner.website);
   const description = str(owner.description);
   const links = list(owner.links).filter((link): link is string => typeof link === "string");
-  if (name) lines.push(`  name: "${clip(name)}"`);
-  if (website) lines.push(`  website: ${clip(website)}`);
-  if (description) lines.push(`  description: "${clip(description)}"`);
-  if (links.length > 0) lines.push(`  links: ${links.map(clip).join(", ")}`);
+  if (name) lines.push(`  name: ${quoted(clip(name))}`);
+  if (website) lines.push(`  website: ${quoted(clip(website))}`);
+  if (description) lines.push(`  description: ${quoted(clip(description))}`);
+  if (links.length > 0) lines.push(`  links: ${links.map(link => quoted(clip(link))).join(", ")}`);
   return [`  Owner-written text (${OWNER_NOTE}):`, ...lines];
 }
 
@@ -154,7 +167,7 @@ export function summarizeAgent(answer: unknown): string {
     const ratings = isObject(data.ratings) ? data.ratings : null;
     const claim = isObject(data.claim) ? data.claim : null;
     const lines: Array<string | null> = [
-      `${str(data.name) ?? "(no name)"}: ${chainLabel(data.chain)} agent ${str(data.agent_id) ?? "?"}, registry ${str(data.registry) ?? "unknown"}.`,
+      `${named(data.name)}: ${chainLabel(data.chain)} agent ${str(data.agent_id) ?? "?"}, registry ${str(data.registry) ?? "unknown"}.`,
       `Data as of ${when(answer.as_of)}. Source: ${str(source.kind) ?? "unknown"}, registry ${str(source.registry_address) ?? str(source.registry) ?? "unknown"}, key ${str(source.key) ?? "unknown"}.`,
       `First seen ${when(data.first_seen_at)}; last seen ${when(data.last_seen_at)}.`,
       `Registered by wallet ${str(data.registrant) ?? "unknown"}${str(data.locator_host) ? `; endpoint host ${str(data.locator_host)}` : ""}.`,
@@ -164,7 +177,7 @@ export function summarizeAgent(answer: unknown): string {
     if (related) lines.push(`Other listings from the same wallet: ${num(related.same_wallet) ?? "not measured"}; with the same name: ${num(related.same_name) ?? "not measured"}; on the same host: ${num(related.same_host) ?? "not measured"}.`);
     if (activity) lines.push(`Registry activity: mint block ${num(activity.mint_block) ?? "unknown"}, ${num(activity.secondary_transfers) ?? "not measured"} later transfers (${num(activity.handouts) ?? "not measured"} of them platform hand-outs just after the mint), ${num(activity.uri_updates) ?? "not measured"} profile link updates.`);
     if (ratings) lines.push(`Ratings (Robinhood Chain only): ${num(ratings.rating_count) ?? 0} recorded, ${num(ratings.active_rating_count) ?? 0} active, ${num(ratings.revoked_count) ?? 0} revoked, ${num(ratings.response_count) ?? 0} responses, measured through block ${num(ratings.measured_through_block) ?? "unknown"}.`);
-    if (data.twin && isObject(data.twin)) lines.push(`The same identity is listed on another registry: ${str(data.twin.name) ?? "(no name)"} (${str(data.twin.registry) ?? "unknown"}).`);
+    if (data.twin && isObject(data.twin)) lines.push(`The same identity is listed on another registry: ${named(data.twin.name)} (${str(data.twin.registry) ?? "unknown"}).`);
     if (claim) {
       lines.push(`Claim: ${claim.status === "on_hold" ? "in force but on hold" : "in force"}; claimed by wallet ${str(claim.wallet) ?? "unknown"} at ${when(claim.claimed_at)}; owner last checked ${when(claim.last_owner_check_at)}.`);
       lines.push(...ownerTextLines(claim));
@@ -202,7 +215,7 @@ export function summarizeHistory(answer: unknown): string {
       for (const item of items.slice(0, 12)) {
         const field = str(item.field);
         const withheld = item.withheld === true;
-        lines.push(`- ${str(item.kind) ?? "entry"}${field ? ` of ${field}` : ""} at ${when(item.occurred_at)}${str(item.reason) ? ` (${str(item.reason)})` : ""}${withheld ? ", text withheld" : ""}${str(item.new_value) && !withheld ? `, new value (${OWNER_NOTE}): "${clip(String(item.new_value))}"` : ""}.`);
+        lines.push(`- ${str(item.kind) ?? "entry"}${field ? ` of ${field}` : ""} at ${when(item.occurred_at)}${str(item.reason) ? ` (${str(item.reason)})` : ""}${withheld ? ", text withheld" : ""}${str(item.new_value) && !withheld ? `, new value (${OWNER_NOTE}): ${quoted(clip(String(item.new_value)))}` : ""}.`);
       }
       if (items.length > 12) lines.push(`- ... and ${items.length - 12} more in the JSON.`);
     }
@@ -234,7 +247,7 @@ export function summarizeCheck(answer: unknown): string {
       const flags = isObject(result.flags) ? result.flags : {};
       const sources = isObject(result.sources) ? result.sources : {};
       const registry = isObject(sources.registry) ? sources.registry : {};
-      lines.push(`${str(agent.name) ?? "(no name)"}: ${chainLabel(agent.chain)} agent ${str(agent.agent_id) ?? "?"} (${str(agent.registry) ?? "registry unknown"}).`);
+      lines.push(`${named(agent.name)}: ${chainLabel(agent.chain)} agent ${str(agent.agent_id) ?? "?"} (${str(agent.registry) ?? "registry unknown"}).`);
       lines.push(`  Source: ${str(registry.kind) ?? "unknown"}, key ${str(registry.key) ?? "unknown"}, last seen ${when(registry.last_seen_at)}.`);
       lines.push(...evidenceLines(result.evidence).map(line => (line === null ? null : `  ${line}`)));
       lines.push(flagLine("first_seen", flags.first_seen, flag => `First seen by Nooscape ${when(flag.first_seen_at)}, ${num(flag.days_since_first_seen) ?? "?"} days ago.`));
