@@ -18,6 +18,8 @@ Five tools, all read-only. Each returns a short plain summary first, then the AP
 
 Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `ethereum` (Ethereum), `base` (Base) and `arc` (Arc). An agent's id on `robinhood`, `bnb`, `ethereum`, `base` and `arc` is its token id (digits). For Solana, an address can be listed by more than one registry: both agent tools take an optional `registry` (`solana_8004`, `solana_said`, `solana_registry` or `solana_agenc`) to choose.
 
+Since 1 November 2026 the API also serves Monad (`monad`). This release does not take `monad` as a `chain` argument yet, so `get_agent` and `get_agent_history` cannot ask for a Monad agent. `get_stats`, a search with no `chain`, and a `check` of a wallet or a `url` with no `chain` can still return Monad listings, because they pass the API's answer through.
+
 `check` takes exactly one of `agent` (`{ chain, id }`), `wallet` or `url`. A `url` can be a full address or a bare host such as `example.com`; it is matched by its host alone and nothing is fetched from it. `chain` can narrow a `wallet` or `url`.
 
 ## Install
@@ -141,7 +143,7 @@ To try all five tools against the live API (about a dozen requests, nothing paid
 
 ```
 node scripts/live-check.mjs                          # the built server
-node scripts/live-check.mjs --npx ./nooscape-mcp-0.1.0.tgz   # through npx, after `npm pack`
+node scripts/live-check.mjs --npx ./nooscape-mcp-0.5.0.tgz   # through npx, after `npm pack`
 NOOSCAPE_API_KEY=nsk_... node scripts/live-check.mjs  # with a key, to see the history succeed
 ```
 
