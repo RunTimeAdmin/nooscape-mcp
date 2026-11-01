@@ -354,9 +354,10 @@ describe("the check's subject", () => {
   });
 });
 
-describe("Ethereum, Base and Arc", () => {
+describe("Ethereum, Base, Arc and Monad", () => {
   const arcAgent = { ...AGENT, data: { ...AGENT.data, chain: "arc", agent_id: "1", registry: "erc8004_arc", name: "Agent #1" } };
   const ethereumAgent = { ...AGENT, data: { ...AGENT.data, chain: "ethereum", agent_id: "55441", registry: "erc8004_eth", name: "Agent #55441" } };
+  const monadAgent = { ...AGENT, data: { ...AGENT.data, chain: "monad", agent_id: "10419", registry: "erc8004_monad", name: "Agent #10419" } };
 
   it("get_agent takes them and names the chain in the summary", async () => {
     const { client, calls } = await connect(() => reply(200, arcAgent));
@@ -378,6 +379,17 @@ describe("Ethereum, Base and Arc", () => {
     expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/ethereum/55441");
   });
 
+  it("get_agent and get_agent_history take Monad and say Monad in the summary", async () => {
+    const { client, calls } = await connect(() => reply(200, monadAgent));
+    const result = await client.callTool({ name: "get_agent", arguments: { chain: "monad", id: "10419" } });
+    expect(isError(result)).toBe(false);
+    expect(textOf(result)).toContain("Monad agent 10419");
+    expect(textOf(result)).not.toContain("monad agent");
+    expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/monad/10419");
+    await client.callTool({ name: "get_agent_history", arguments: { chain: "monad", id: "10419" } });
+    expect(calls[1]!.url).toBe("https://nooscape.si/api/v1/agents/monad/10419/history");
+  });
+
   it("search_agents and check take them too", async () => {
     const { client, calls } = await connect(() => reply(200, SEARCH));
     expect(isError(await client.callTool({ name: "search_agents", arguments: { query: "agent", chain: "base" } }))).toBe(false);
@@ -388,6 +400,10 @@ describe("Ethereum, Base and Arc", () => {
     expect(calls[2]!.url).toBe("https://nooscape.si/api/v1/agents/search?q=agent&chain=ethereum");
     await client.callTool({ name: "check", arguments: { agent: { chain: "ethereum", id: "55441" } } });
     expect(JSON.parse(String(calls[3]!.init.body))).toEqual({ agent: { chain: "ethereum", id: "55441" } });
+    expect(isError(await client.callTool({ name: "search_agents", arguments: { query: "agent", chain: "monad" } }))).toBe(false);
+    expect(calls[4]!.url).toBe("https://nooscape.si/api/v1/agents/search?q=agent&chain=monad");
+    await client.callTool({ name: "check", arguments: { agent: { chain: "monad", id: "10419" } } });
+    expect(JSON.parse(String(calls[5]!.init.body))).toEqual({ agent: { chain: "monad", id: "10419" } });
   });
 
   it("still refuses a chain the API does not serve, before any request is made", async () => {
@@ -398,6 +414,6 @@ describe("Ethereum, Base and Arc", () => {
   });
 
   it("says in its instructions which chains it reads", () => {
-    expect(INSTRUCTIONS).toContain("Robinhood Chain, BNB Smart Chain, Solana, Ethereum, Base and Arc");
+    expect(INSTRUCTIONS).toContain("Robinhood Chain, BNB Smart Chain, Solana, Ethereum, Base, Arc and Monad");
   });
 });
