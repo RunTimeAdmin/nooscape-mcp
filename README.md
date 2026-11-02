@@ -88,7 +88,7 @@ Run `npx -y nooscape-mcp` as a stdio server.
 - "Look up Robinhood Chain agent 8865 on Nooscape. When was it first seen, and who registered it?"
 - "Search Nooscape for agents on the host `example.com`."
 - "Before I pay this wallet, what does Nooscape have on record about it?" (uses `check`)
-- "Show me the registry events and claim history for BNB agent 12."
+- "Show me the registry events and claim history for Robinhood Chain agent 8865."
 - "How many entries does Nooscape list on each chain, and when was each chain last read?" (uses `get_stats`)
 
 ## What the answers mean, and what they do not
@@ -141,7 +141,7 @@ To try all five tools against the live API (about a dozen requests, nothing paid
 
 ```
 node scripts/live-check.mjs                          # the built server
-node scripts/live-check.mjs --npx ./nooscape-mcp-0.6.0.tgz   # through npx, after `npm pack`
+node scripts/live-check.mjs --npx ./nooscape-mcp-<version>.tgz   # through npx, after `npm pack`
 NOOSCAPE_API_KEY=nsk_... node scripts/live-check.mjs  # with a key, to see the history succeed
 ```
 
