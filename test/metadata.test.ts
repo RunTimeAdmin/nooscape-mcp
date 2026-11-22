@@ -67,7 +67,9 @@ describe("what the readme promises", () => {
 
   it("carries the no paid influence line and the data attribution", () => {
     expect(readme).toContain("Nothing a caller pays buys a listing, a tier or an evidence level.");
-    expect(readme).toContain("Data from Nooscape (https://nooscape.si).");
+    expect(readme).toContain("Data from Nooscape (https://nooscape.si), licensed under CC BY 4.0");
+    expect(readme).toContain("CC BY 4.0");
+    expect(readme).not.toContain("provisional");
     expect(readme).toContain("nooscape.si/terms");
   });
 

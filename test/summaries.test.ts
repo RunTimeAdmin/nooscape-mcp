@@ -40,7 +40,7 @@ describe("what every summary keeps", () => {
   });
 
   it("ends with the attribution the terms require", () => {
-    for (const summary of Object.values(ALL)) expect(summary).toContain("Attribution: Data from Nooscape (https://nooscape.si).");
+    for (const summary of Object.values(ALL)) expect(summary).toContain("Attribution: Data from Nooscape (https://nooscape.si), licensed under CC BY 4.0");
   });
 
   it("quotes the API's statements whole and sets them apart", () => {

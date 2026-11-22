@@ -68,7 +68,7 @@ describe("the tools it offers", () => {
     expect(Object.keys(byName.search_agents!.inputSchema.properties ?? {}).sort()).toEqual(["chain", "query"]);
     expect(Object.keys(byName.get_agent!.inputSchema.properties ?? {}).sort()).toEqual(["chain", "id", "registry"]);
     expect(Object.keys(byName.get_agent_history!.inputSchema.properties ?? {}).sort()).toEqual(["chain", "id", "registry"]);
-    expect(Object.keys(byName.check!.inputSchema.properties ?? {}).sort()).toEqual(["agent", "chain", "url", "wallet"]);
+    expect(Object.keys(byName.check!.inputSchema.properties ?? {}).sort()).toEqual(["agent", "chain", "pay_to", "url", "wallet"]);
     expect(Object.keys(byName.get_stats!.inputSchema.properties ?? {})).toEqual([]);
     expect(byName.get_agent!.inputSchema.required).toEqual(["chain", "id"]);
   });
@@ -414,6 +414,67 @@ describe("Ethereum, Base, Arc and Monad", () => {
   });
 
   it("says in its instructions which chains it reads", () => {
-    expect(INSTRUCTIONS).toContain("Robinhood Chain, BNB Smart Chain, Solana, Ethereum, Base, Arc and Monad");
+    expect(INSTRUCTIONS).toContain("Robinhood Chain, BNB Smart Chain, Solana, Ethereum, Base, Arc, Monad, Gnosis and Celo");
+  });
+});
+
+describe("Gnosis and Celo", () => {
+  const celoAgent = { ...AGENT, data: { ...AGENT.data, chain: "celo", agent_id: "1312", registry: "erc8004_celo", name: "Agent #1312" } };
+  const gnosisAgent = { ...AGENT, data: { ...AGENT.data, chain: "gnosis", agent_id: "88", registry: "erc8004_gnosis", name: "Agent #88" } };
+
+  it("every tool takes them, and the summary names the chain", async () => {
+    const answers = [celoAgent, celoAgent, gnosisAgent, SEARCH, SEARCH];
+    const { client, calls } = await connect(() => reply(200, answers[Math.min(calls.length - 1, answers.length - 1)]));
+    const celo = await client.callTool({ name: "get_agent", arguments: { chain: "celo", id: "1312" } });
+    expect(textOf(celo)).toContain("Celo agent 1312");
+    expect(calls[0]!.url).toBe("https://nooscape.si/api/v1/agents/celo/1312");
+    await client.callTool({ name: "get_agent_history", arguments: { chain: "celo", id: "1312" } });
+    expect(calls[1]!.url).toBe("https://nooscape.si/api/v1/agents/celo/1312/history");
+    const gnosis = await client.callTool({ name: "get_agent", arguments: { chain: "gnosis", id: "88" } });
+    expect(textOf(gnosis)).toContain("Gnosis agent 88");
+    await client.callTool({ name: "search_agents", arguments: { query: "agent", chain: "gnosis" } });
+    expect(calls[3]!.url).toBe("https://nooscape.si/api/v1/agents/search?q=agent&chain=gnosis");
+    await client.callTool({ name: "check", arguments: { agent: { chain: "celo", id: "1312" } } });
+    expect(JSON.parse(String(calls[4]!.init.body))).toEqual({ agent: { chain: "celo", id: "1312" } });
+  });
+});
+
+describe("pay_to on the check", () => {
+  const PAYEE = "0xAbCdEf0123456789aBcDeF0123456789abcdef01";
+  const withPayTo = (payTo: Record<string, unknown>) => {
+    const result = { ...(CHECK as { data: { results: Record<string, unknown>[] } }).data.results[0]!, pay_to: payTo };
+    return { ...CHECK, data: { ...(CHECK as { data: object }).data, results: [result] } };
+  };
+
+  it("is sent with an agent, as the API names it", async () => {
+    const { client, calls } = await connect(() => reply(200, CHECK));
+    const result = await client.callTool({ name: "check", arguments: { agent: { chain: "base", id: "42" }, pay_to: PAYEE } });
+    expect(isError(result)).toBe(false);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ agent: { chain: "base", id: "42" }, pay_to: PAYEE });
+  });
+
+  it("is refused without an agent, on Solana, and when it is not an address, before any request is made", async () => {
+    const { client, calls } = await connect(() => reply(200, CHECK));
+    expect(textOf(await client.callTool({ name: "check", arguments: { wallet: "0x00000000000000000000000000000000000000aa", pay_to: PAYEE } }))).toContain("pay_to goes with an agent");
+    expect(textOf(await client.callTool({ name: "check", arguments: { agent: { chain: "solana", id: "So11111111111111111111111111111111111111112" }, pay_to: PAYEE } }))).toContain("Solana has none");
+    expect(isError(await client.callTool({ name: "check", arguments: { agent: { chain: "base", id: "42" }, pay_to: "nope" } }))).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is summarised by its outcome, as a fact about the registry and never as advice", async () => {
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ address: PAYEE.toLowerCase(), outcome: "matches_agent_wallet", agent_wallet: PAYEE.toLowerCase(), read_at: "2026-11-21T22:00:00.000Z", reason: null }, `pay_to: ${PAYEE.toLowerCase()} is the wallet the agent's registry holds (read 2026-11-21T22:00:00.000Z).`],
+      [{ address: PAYEE.toLowerCase(), outcome: "differs_from_agent_wallet", agent_wallet: "0x3333333333333333333333333333333333333333", read_at: "2026-11-21T22:00:00.000Z", reason: null }, "which is 0x3333333333333333333333333333333333333333"],
+      [{ address: PAYEE.toLowerCase(), outcome: "no_agent_wallet", agent_wallet: null, read_at: "2026-11-21T22:00:00.000Z", reason: null }, "the agent's registry holds no wallet for it"],
+      [{ address: PAYEE.toLowerCase(), outcome: "not_read", agent_wallet: null, read_at: null, reason: "The chain could not be read right now." }, "pay_to: not read. The chain could not be read right now."],
+    ];
+    for (const [payTo, words] of cases) {
+      const { client } = await connect(() => reply(200, withPayTo(payTo)));
+      const text = textOf(await client.callTool({ name: "check", arguments: { agent: { chain: "base", id: "42" }, pay_to: PAYEE } }));
+      expect(text, String(payTo.outcome)).toContain(words);
+      // The line says what the registry holds and nothing more: no word that would make it advice.
+      const line = text.split("\n").find(candidate => candidate.includes("pay_to:"))!;
+      expect(line, String(payTo.outcome)).not.toMatch(/\b(safe|unsafe|trust(ed|worthy)?|scam|legit|should|recommend)\b/i);
+    }
   });
 });

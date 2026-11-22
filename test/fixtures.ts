@@ -1,10 +1,11 @@
 /** Answers shaped like the real API's (read from the live API on 19 October 2026, trimmed), and a few errors. */
 
+/** The license object as the live API gives it since 6 November 2026 (CC BY 4.0). */
 export const LICENSE = {
-  name: "Nooscape data, provisional terms",
+  name: "CC BY 4.0",
   url: "https://nooscape.si/terms",
-  attribution: "Data from Nooscape (https://nooscape.si).",
-  notes: "Attribution is required. Do not resell bulk copies. A final data license will replace these provisional terms.",
+  attribution: "Data from Nooscape (https://nooscape.si), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).",
+  notes: "Attribution is required. The facts and records Nooscape produces are licensed under CC BY 4.0: copy, share and adapt them, commercially too, with that credit. Text that registrants published is theirs and is shown as published. The Terms still set the rate limits for reading the data from this service.",
 };
 
 export const ACKNOWLEDGED =

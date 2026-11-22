@@ -11,7 +11,7 @@ export const DEFAULT_TIMEOUT_MS = 15_000;
 /** The most of an answer that is read, in bytes. The API's largest answers are far smaller than this. */
 export const MAX_BODY_BYTES = 1_000_000;
 
-export const CHAINS = ["robinhood", "bnb", "solana", "ethereum", "base", "arc", "monad"] as const;
+export const CHAINS = ["robinhood", "bnb", "solana", "ethereum", "base", "arc", "monad", "gnosis", "celo"] as const;
 export type Chain = (typeof CHAINS)[number];
 
 /** Solana addresses can be listed by more than one registry; this chooses one. */
@@ -195,8 +195,8 @@ export class NooscapeClient {
   }
 
   /** POST /check. Needs a Pro key or an x402 payment, which this client does not make. */
-  check(subject: CheckSubject, chain?: Chain): Promise<unknown> {
-    return this.request("POST", "/check", { ...subject, ...(chain ? { chain } : {}) });
+  check(subject: CheckSubject, chain?: Chain, payTo?: string): Promise<unknown> {
+    return this.request("POST", "/check", { ...subject, ...(chain ? { chain } : {}), ...(payTo ? { pay_to: payTo } : {}) });
   }
 
   private async request(method: "GET" | "POST", path: string, body?: unknown): Promise<unknown> {
