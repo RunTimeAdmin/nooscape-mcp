@@ -33,7 +33,7 @@ const str = (value: unknown): string | null => {
 const num = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
 const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
-const CHAIN_LABEL: Record<string, string> = { robinhood: "Robinhood Chain", bnb: "BNB Smart Chain", solana: "Solana", ethereum: "Ethereum", base: "Base", arc: "Arc", monad: "Monad" };
+const CHAIN_LABEL: Record<string, string> = { robinhood: "Robinhood Chain", bnb: "BNB Smart Chain", solana: "Solana", ethereum: "Ethereum", base: "Base", arc: "Arc", monad: "Monad", gnosis: "Gnosis", celo: "Celo" };
 const chainLabel = (chain: unknown) => (typeof chain === "string" ? (CHAIN_LABEL[chain] ?? chain) : "an unknown chain");
 
 /** The date part and the time of an ISO string, as the API gave it. */
@@ -232,6 +232,24 @@ function flagLine(label: string, flag: unknown, detail: (flag: Json) => string):
   return `  ${label}: ${present}. ${detail(flag)}`.trimEnd();
 }
 
+/** What the check says about a pay_to address: the agent's registry wallet, read when the check ran. A fact, not advice to pay or not. */
+function payToLine(payTo: Record<string, unknown>): string {
+  const address = str(payTo.address) ?? "the address";
+  const wallet = str(payTo.agent_wallet);
+  switch (payTo.outcome) {
+    case "matches_agent_wallet":
+      return `pay_to: ${address} is the wallet the agent's registry holds (read ${when(payTo.read_at)}).`;
+    case "differs_from_agent_wallet":
+      return `pay_to: ${address} is not the wallet the agent's registry holds, which is ${wallet ?? "another address"} (read ${when(payTo.read_at)}).`;
+    case "no_agent_wallet":
+      return `pay_to: the agent's registry holds no wallet for it (read ${when(payTo.read_at)}), so ${address} cannot be compared with one.`;
+    case "not_read":
+      return `pay_to: not read. ${str(payTo.reason) ?? "The registry could not be read."}`;
+    default:
+      return `pay_to: ${str(payTo.outcome) ?? "no outcome given"}.`;
+  }
+}
+
 export function summarizeCheck(answer: unknown): string {
   try {
     if (!isObject(answer) || !isObject(answer.data)) return NOT_SHAPED;
@@ -254,6 +272,7 @@ export function summarizeCheck(answer: unknown): string {
       lines.push(flagLine("ownership_changes", flags.ownership_changes, flag => `${num(flag.changes_recorded) ?? "Not measured"} recorded${num(flag.handouts_recorded) !== null ? ` (apart from ${num(flag.handouts_recorded)} platform hand-outs)` : ""}${num(flag.latest_change_block) !== null ? `, latest at block ${num(flag.latest_change_block)}` : ""}.`));
       lines.push(flagLine("revoked_feedback", flags.revoked_feedback, flag => (num(flag.rating_count) !== null ? `${num(flag.revoked_count) ?? 0} of ${num(flag.rating_count)} ratings were revoked by the rater.` : "Ratings are read on Robinhood Chain only.")));
       lines.push(flagLine("fleet", flags.fleet, flag => (num(flag.listed_by_same_wallet) !== null ? `${num(flag.listed_by_same_wallet)} listings from the same wallet, this one included.` : "Not available.")));
+      if (isObject(result.pay_to)) lines.push(`  ${payToLine(result.pay_to)}`);
     }
     if (results.length === 0) lines.push("No listing matched.");
     lines.push(str(data.statement) ? `API statement: ${str(data.statement)}` : null);

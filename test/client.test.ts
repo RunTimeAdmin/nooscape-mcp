@@ -407,7 +407,15 @@ describe("the chains it names", () => {
     ]);
   });
 
-  it("offers exactly the seven chains the API serves", () => {
-    expect([...CHAINS]).toEqual(["robinhood", "bnb", "solana", "ethereum", "base", "arc", "monad"]);
+  it("offers exactly the nine chains the API serves", () => {
+    expect([...CHAINS]).toEqual(["robinhood", "bnb", "solana", "ethereum", "base", "arc", "monad", "gnosis", "celo"]);
+  });
+
+  it("sends pay_to with an agent's check, and nothing extra without it", async () => {
+    const { client, calls } = rig(() => reply(200, {}));
+    await client.check({ agent: { chain: "celo", id: "7" } }, undefined, "0x00000000000000000000000000000000000000aa");
+    await client.check({ agent: { chain: "celo", id: "7" } });
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ agent: { chain: "celo", id: "7" }, pay_to: "0x00000000000000000000000000000000000000aa" });
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ agent: { chain: "celo", id: "7" } });
   });
 });

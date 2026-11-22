@@ -14,15 +14,17 @@ Five tools, all read-only. Each returns a short plain summary first, then the AP
 | `get_stats()` | What the directory holds on each chain it reads: the entries it lists and the registries behind them, the ratings recorded on chain where they are counted, the entries first seen in the last 24 hours, and when each chain was last read. A chain Nooscape does not read is reported as not indexed, which is not zero. | nothing |
 | `get_agent(chain, id)` | One agent's record: first and last seen, who registered it, evidence level, listings that share its wallet, registry activity, ratings, and any claim by its owner. | nothing |
 | `get_agent_history(chain, id)` | One agent's registry events and the public history of claims on it. | an API key (a free one is enough) |
-| `check(agent \| wallet \| url)` | Pre-flight facts: when each listing was first seen, recorded ownership changes, the share of ratings that were revoked, how many listings its wallet registered, and the evidence level. | a Pro key, or an x402 payment (see below) |
+| `check(agent \| wallet \| url)` | Pre-flight facts: when each listing was first seen, recorded ownership changes, the share of ratings that were revoked, how many listings its wallet registered, and the evidence level. With an agent, `pay_to` also says whether an address is the wallet the agent's registry holds. | a Pro key, or an x402 payment (see below) |
 
-Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `ethereum` (Ethereum), `base` (Base), `arc` (Arc) and `monad` (Monad). An agent's id on `robinhood`, `bnb`, `ethereum`, `base`, `arc` and `monad` is its token id (digits). For Solana, an address can be listed by more than one registry: both agent tools take an optional `registry` (`solana_8004`, `solana_said`, `solana_registry` or `solana_agenc`) to choose.
+Chains are `robinhood` (Robinhood Chain), `bnb` (BNB Smart Chain), `solana`, `ethereum` (Ethereum), `base` (Base), `arc` (Arc), `monad` (Monad), `gnosis` (Gnosis) and `celo` (Celo). An agent's id on every chain but Solana is its token id (digits). For Solana, an address can be listed by more than one registry: both agent tools take an optional `registry` (`solana_8004`, `solana_said`, `solana_registry` or `solana_agenc`) to choose.
 
 `check` takes exactly one of `agent` (`{ chain, id }`), `wallet` or `url`. A `url` can be a full address or a bare host such as `example.com`; it is matched by its host alone and nothing is fetched from it. `chain` can narrow a `wallet` or `url`.
 
+With an `agent` on any chain but Solana, `check` also takes `pay_to`: an address you are about to pay, such as the `payTo` of an x402 payment requirement. Nooscape reads the wallet the agent's registry holds when the check runs and says whether the address is that wallet, another one, or whether the registry holds none (or that it could not be read). It is a fact about the registry at that moment, not advice to pay.
+
 ## Install
 
-Node.js 18 or later. Nothing to build: `npx` fetches it. `npx -y nooscape-mcp` runs the latest release every time it starts. To stay on one release, name it, as in `nooscape-mcp@0.6.0`.
+Node.js 18 or later. Nothing to build: `npx` fetches it. `npx -y nooscape-mcp` runs the latest release every time it starts. To stay on one release, name it, as in `nooscape-mcp@0.7.0`.
 
 ### Claude Desktop
 
@@ -101,7 +103,7 @@ Run `npx -y nooscape-mcp` as a stdio server.
 
 ## Attribution and terms
 
-Data from Nooscape (https://nooscape.si). Attribution is required where the data is used. Do not resell bulk copies. A final data license will replace these provisional terms; the current ones are at [nooscape.si/terms](https://nooscape.si/terms). Every answer carries a `license` object with the attribution line.
+The facts and records Nooscape produces are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): copy, share and adapt them, commercially too, with the credit "Data from Nooscape (https://nooscape.si), licensed under CC BY 4.0". Text that registrants published is theirs and is shown as they published it. The [terms](https://nooscape.si/terms) set the rate limits for reading the data from the service. Every answer carries a `license` object with the attribution line. This package's own code is MIT licensed.
 
 ## Streamable HTTP mode
 
